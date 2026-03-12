@@ -4,6 +4,9 @@ import com.searchify.client.SearchifyConfig;
 import com.searchify.util.ItemSearchEngine;
 import it.unimi.dsi.fastutil.ints.Int2FloatMap;
 import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2BooleanMap;
+import it.unimi.dsi.fastutil.objects.Reference2BooleanOpenHashMap;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
@@ -13,12 +16,13 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.text.TranslatableTextContent;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Final;
@@ -29,8 +33,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import net.minecraft.client.gui.Click;
-import net.minecraft.entity.player.PlayerInventory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,44 +69,43 @@ public abstract class HandledScreenMixin extends Screen {
     @Unique private float historyAnimProgress = 1.0f;
 
     @Unique private final Int2FloatMap fadeMap = new Int2FloatOpenHashMap();
+    @Unique private final Reference2BooleanMap<ItemStack> matchCache = new Reference2BooleanOpenHashMap<>();
+    @Unique private final List<Text> cachedHistoryTexts = new ArrayList<>();
+
     @Unique private String cachedSearchQuery = "";
     @Unique private String lastRawQuery = "";
-
-    // Memory Cache
-    @Unique private final ItemStack[] cachedStacks = new ItemStack[300];
-    @Unique private final boolean[] cachedMatches = new boolean[300];
-    @Unique private final List<Text> cachedHistoryTexts = new ArrayList<>();
 
     protected HandledScreenMixin(Text title) {
         super(title);
     }
 
     @Unique
-    private boolean checkUnsupportedScreen() {
-        if (this.client == null || this.client.currentScreen == null) return true;
+    private boolean isScreenSupported() {
+        if (this.client == null || this.client.currentScreen == null) return false;
         Screen screen = this.client.currentScreen;
-        if (!(screen instanceof GenericContainerScreen) && !(screen instanceof ShulkerBoxScreen)) return true;
 
         String type = "unknown";
         if (screen instanceof ShulkerBoxScreen) {
             type = "shulker";
-        } else if (screen instanceof GenericContainerScreen && this.client.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult blockHit && this.client.world != null) {
-            net.minecraft.block.Block block = this.client.world.getBlockState(blockHit.getBlockPos()).getBlock();
-            String id = Registries.BLOCK.getId(block).getPath();
-            if (id.contains("barrel")) type = "barrel";
-            else if (id.contains("ender_chest")) type = "ender_chest";
-            else if (id.contains("trapped_chest")) type = "trapped_chest";
-            else if (id.contains("copper_chest")) type = "copper_chest";
-            else type = "chest";
+        } else if (screen instanceof GenericContainerScreen) {
+            Text title = screen.getTitle();
+            if (title.getContent() instanceof TranslatableTextContent translatable) {
+                String key = translatable.getKey();
+                if (key.contains("barrel")) type = "barrel";
+                else if (key.contains("ender_chest") || key.contains("enderchest")) type = "ender_chest";
+                else if (key.contains("trapped")) type = "trapped_chest";
+                else if (key.contains("copper")) type = "copper_chest";
+                else if (key.contains("chest")) type = "chest";
+            }
         }
 
         return switch (type) {
-            case "chest" -> !SearchifyConfig.enableChests;
-            case "barrel" -> !SearchifyConfig.enableBarrels;
-            case "ender_chest" -> !SearchifyConfig.enableEnderChests;
-            case "trapped_chest" -> !SearchifyConfig.enableTrappedChests;
-            case "copper_chest" -> !SearchifyConfig.enableCopperChests;
-            case "shulker" -> !SearchifyConfig.enableShulkerBoxes;
+            case "chest" -> SearchifyConfig.enableChests;
+            case "barrel" -> SearchifyConfig.enableBarrels;
+            case "ender_chest" -> SearchifyConfig.enableEnderChests;
+            case "trapped_chest" -> SearchifyConfig.enableTrappedChests;
+            case "copper_chest" -> SearchifyConfig.enableCopperChests;
+            case "shulker" -> SearchifyConfig.enableShulkerBoxes;
             default -> false;
         };
     }
@@ -126,7 +127,7 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
-        this.isSupportedCache = !checkUnsupportedScreen();
+        this.isSupportedCache = isScreenSupported();
         if (!this.isSupportedCache || !SearchifyConfig.isEnabled) {
             this.searchBox = null;
             return;
@@ -247,10 +248,9 @@ public abstract class HandledScreenMixin extends Screen {
                 context.fill(historyX, historyY + HISTORY_SIZE + 2, historyX + dropDownWidth, historyY + HISTORY_SIZE + 2 + listHeight, 0x88000000);
 
                 int currentY = historyY + HISTORY_SIZE + 4;
-                for (int i = 0; i < this.cachedHistoryTexts.size(); i++) {
+                for (Text cachedHistoryText : this.cachedHistoryTexts) {
                     boolean isHovered = isHovering(mouseX, mouseY, historyX, currentY, dropDownWidth, textHeight);
-                    Text textToDraw = this.cachedHistoryTexts.get(i);
-                    if (isHovered) textToDraw = textToDraw.copy().formatted(Formatting.UNDERLINE);
+                    Text textToDraw = isHovered ? cachedHistoryText.copy().formatted(Formatting.UNDERLINE) : cachedHistoryText;
                     context.drawTextWithShadow(this.textRenderer, textToDraw, historyX + 4, currentY + 2, isHovered ? 0xFFFFFFFF : 0xFFAAAAAA);
                     currentY += textHeight;
                 }
@@ -405,27 +405,22 @@ public abstract class HandledScreenMixin extends Screen {
         if (!rawQuery.equals(lastRawQuery)) {
             lastRawQuery = rawQuery;
             cachedSearchQuery = rawQuery.trim().toLowerCase();
+            matchCache.clear(); // Очищаем кэш при смене запроса
         }
 
         if (cachedSearchQuery.isEmpty()) return true;
         if (!slot.hasStack()) return false;
 
         ItemStack stack = slot.getStack();
-        int slotId = slot.id;
 
-        // Pointer-based validation
-        if (slotId >= 0 && slotId < cachedStacks.length) {
-            if (cachedStacks[slotId] == stack) {
-                return cachedMatches[slotId];
-            }
+        // Быстрая O(1) проверка по ссылке на объект (без аллокации памяти)
+        if (matchCache.containsKey(stack)) {
+            return matchCache.getBoolean(stack);
         }
 
         boolean match = ItemSearchEngine.matches(stack, cachedSearchQuery);
+        matchCache.put(stack, match);
 
-        if (slotId >= 0 && slotId < cachedStacks.length) {
-            cachedStacks[slotId] = stack;
-            cachedMatches[slotId] = match;
-        }
         return match;
     }
 
