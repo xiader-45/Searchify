@@ -6,10 +6,11 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 public class SearchifyConfig {
 
@@ -21,8 +22,6 @@ public class SearchifyConfig {
     public static boolean autoLock = false;
     public static String savedSearchQuery = "";
     public static boolean searchInsideContainers = true;
-
-    // ТЕПЕРЬ СТРОКА (Например "key.keyboard.g")
     public static String searchKeybind = "key.keyboard.g";
 
     public static DisplayMode displayMode = DisplayMode.ANIMATION;
@@ -65,7 +64,7 @@ public class SearchifyConfig {
 
     public static void load() {
         if (CONFIG_FILE.exists()) {
-            try (FileReader reader = new FileReader(CONFIG_FILE)) {
+            try (BufferedReader reader = Files.newBufferedReader(CONFIG_FILE.toPath(), StandardCharsets.UTF_8)) {
                 ConfigData data = GSON.fromJson(reader, ConfigData.class);
                 if (data != null) {
                     isEnabled = data.isEnabled;
@@ -94,7 +93,7 @@ public class SearchifyConfig {
                         highlightColor = 0x00FF00;
                     }
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 LOGGER.error("Failed to read Searchify config!", e);
             }
         } else {
@@ -123,9 +122,9 @@ public class SearchifyConfig {
         data.enableCopperChests = enableCopperChests;
         data.enableShulkerBoxes = enableShulkerBoxes;
 
-        try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
+        try (BufferedWriter writer = Files.newBufferedWriter(CONFIG_FILE.toPath(), StandardCharsets.UTF_8)) {
             GSON.toJson(data, writer);
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOGGER.error("Failed to save Searchify config!", e);
         }
     }

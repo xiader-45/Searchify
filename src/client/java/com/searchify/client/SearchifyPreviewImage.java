@@ -164,6 +164,7 @@ public class SearchifyPreviewImage implements ImageRenderer {
                     float itemCenterX = slotX + 9f;
                     float itemCenterY = slotY + 9f;
 
+                    // Matrix usage follows 2.0 flat engine (x, y explicit bounds check)
                     context.getMatrices().pushMatrix();
                     context.getMatrices().translate(itemCenterX, itemCenterY);
                     context.getMatrices().scale(renderScale, renderScale);

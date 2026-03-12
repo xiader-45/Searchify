@@ -1,6 +1,8 @@
 package com.searchify.client.mixin;
 
 import com.searchify.client.SearchifyConfig;
+import it.unimi.dsi.fastutil.ints.Int2FloatMap;
+import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.GenericContainerScreen;
@@ -35,9 +37,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.gui.Click;
 
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 @Mixin(HandledScreen.class)
 public abstract class HandledScreenMixin extends Screen {
@@ -62,44 +63,44 @@ public abstract class HandledScreenMixin extends Screen {
     @Unique private static final int BTN_SIZE = 12;
     @Unique private static final int LOCK_SIZE = 5;
 
+    @Unique private boolean isSupportedCache = false;
     @Unique private int currentBgWidth = 80;
     @Unique private float currentDeltaTicks = 1.0f;
+
+    // Efficient primitive map to prevent auto-boxing memory leaks
+    @Unique private final Int2FloatMap fadeMap = new Int2FloatOpenHashMap();
+
+    // High-performance search caching structures
     @Unique private String cachedSearchQuery = "";
     @Unique private String lastRawQuery = "";
-    @Unique private final Map<Integer, Float> fadeMap = new HashMap<>();
+    @Unique private String cacheGlobalQuery = null;
+    @Unique private final ItemStack[] cachedStacks = new ItemStack[300];
+    @Unique private final boolean[] cachedMatches = new boolean[300];
 
     protected HandledScreenMixin(Text title) {
         super(title);
     }
 
     @Unique
-    private String getContainerType() {
-        if (this.client == null || this.client.currentScreen == null) return "unknown";
-        Screen screen = this.client.currentScreen;
-
-        if (screen instanceof ShulkerBoxScreen) return "shulker";
-
-        if (screen instanceof GenericContainerScreen) {
-            if (this.client.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult blockHit && this.client.world != null) {
-                net.minecraft.block.Block block = this.client.world.getBlockState(blockHit.getBlockPos()).getBlock();
-                String id = Registries.BLOCK.getId(block).getPath();
-                if (id.contains("barrel")) return "barrel";
-                if (id.contains("ender_chest")) return "ender_chest";
-                if (id.contains("trapped_chest")) return "trapped_chest";
-                if (id.contains("copper_chest")) return "copper_chest";
-                return "chest";
-            }
-        }
-        return "unknown";
-    }
-
-    @Unique
-    private boolean isUnsupportedScreen() {
+    private boolean checkUnsupportedScreen() {
         if (this.client == null || this.client.currentScreen == null) return true;
         Screen screen = this.client.currentScreen;
         if (!(screen instanceof GenericContainerScreen) && !(screen instanceof ShulkerBoxScreen)) return true;
 
-        return switch (getContainerType()) {
+        String type = "unknown";
+        if (screen instanceof ShulkerBoxScreen) {
+            type = "shulker";
+        } else if (screen instanceof GenericContainerScreen && this.client.crosshairTarget instanceof net.minecraft.util.hit.BlockHitResult blockHit && this.client.world != null) {
+            net.minecraft.block.Block block = this.client.world.getBlockState(blockHit.getBlockPos()).getBlock();
+            String id = Registries.BLOCK.getId(block).getPath();
+            if (id.contains("barrel")) type = "barrel";
+            else if (id.contains("ender_chest")) type = "ender_chest";
+            else if (id.contains("trapped_chest")) type = "trapped_chest";
+            else if (id.contains("copper_chest")) type = "copper_chest";
+            else type = "chest";
+        }
+
+        return switch (type) {
             case "chest" -> !SearchifyConfig.enableChests;
             case "barrel" -> !SearchifyConfig.enableBarrels;
             case "ender_chest" -> !SearchifyConfig.enableEnderChests;
@@ -119,7 +120,8 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
-        if (isUnsupportedScreen()) return;
+        this.isSupportedCache = !checkUnsupportedScreen();
+        if (!this.isSupportedCache) return;
 
         if (!SearchifyConfig.isEnabled) {
             this.searchBox = null;
@@ -184,7 +186,7 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "renderMain", at = @At("TAIL"))
     private void onRender(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
-        if (isUnsupportedScreen() || this.searchBox == null) return;
+        if (!this.isSupportedCache || this.searchBox == null) return;
 
         int startY = this.y + 4;
         if (!this.searchBox.isVisible()) {
@@ -200,14 +202,10 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(Click click, boolean doubled, CallbackInfoReturnable<Boolean> cir) {
-        if (isUnsupportedScreen() || this.searchBox == null) return;
+        if (!this.isSupportedCache || this.searchBox == null || click.button() != 0) return;
 
         double mouseX = click.x();
         double mouseY = click.y();
-
-        // 0 = Left Mouse Button
-        if (click.button() != 0) return;
-
         int startY = this.y + 4;
 
         if (!this.searchBox.isVisible()) {
@@ -235,6 +233,8 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyInput input, CallbackInfoReturnable<Boolean> cir) {
+        if (!this.isSupportedCache) return;
+
         if (this.searchBox != null && this.searchBox.isFocused() && this.searchBox.isVisible()) {
             if (this.searchBox.keyPressed(input)) {
                 cir.setReturnValue(true);
@@ -244,25 +244,20 @@ public abstract class HandledScreenMixin extends Screen {
         } else if (this.searchBox != null) {
             int targetKeyCode = net.minecraft.client.util.InputUtil.fromTranslationKey(SearchifyConfig.searchKeybind).getCode();
 
-            if (input.key() == targetKeyCode) {
-                if (this.focusedSlot != null && this.focusedSlot.hasStack()) {
-                    ItemStack stack = this.focusedSlot.getStack();
-                    String localizedName = stack.getName().getString();
+            if (input.key() == targetKeyCode && this.focusedSlot != null && this.focusedSlot.hasStack()) {
+                ItemStack stack = this.focusedSlot.getStack();
+                String localizedName = stack.getName().getString();
 
-                    this.searchBox.setVisible(true);
-                    this.searchBox.active = true;
-                    this.searchBox.setText(localizedName);
+                this.searchBox.setVisible(true);
+                this.searchBox.active = true;
+                this.searchBox.setText(localizedName);
 
-                    SearchifyConfig.autoLock = true;
-                    SearchifyConfig.savedSearchQuery = localizedName;
-                    SearchifyConfig.save();
+                SearchifyConfig.autoLock = true;
+                SearchifyConfig.savedSearchQuery = localizedName;
+                SearchifyConfig.save();
 
-                    this.lastRawQuery = localizedName;
-                    this.cachedSearchQuery = localizedName.trim().toLowerCase();
-
-                    playClickSound();
-                    cir.setReturnValue(true);
-                }
+                playClickSound();
+                cir.setReturnValue(true);
             }
         }
     }
@@ -279,7 +274,6 @@ public abstract class HandledScreenMixin extends Screen {
 
         String rawQuery = this.searchBox.getText();
 
-        // Cache query to avoid redundant formatting
         if (!rawQuery.equals(lastRawQuery)) {
             lastRawQuery = rawQuery;
             cachedSearchQuery = rawQuery.trim().toLowerCase();
@@ -289,19 +283,59 @@ public abstract class HandledScreenMixin extends Screen {
         if (!slot.hasStack()) return false;
 
         ItemStack stack = slot.getStack();
-        if (isItemStackMatchingSearch(stack, cachedSearchQuery)) return true;
+        int slotId = slot.id;
 
+        if (!cachedSearchQuery.equals(cacheGlobalQuery)) {
+            cacheGlobalQuery = cachedSearchQuery;
+            Arrays.fill(cachedStacks, null);
+        }
+
+        // Быстрый путь: читаем результат из кэша O(1)
+        if (slotId >= 0 && slotId < cachedStacks.length) {
+            if (cachedStacks[slotId] != null && ItemStack.areEqual(stack, cachedStacks[slotId])) {
+                return cachedMatches[slotId];
+            }
+        }
+
+        // Запускаем рекурсивный поиск с начальной глубиной 0
+        boolean match = performDeepSearch(stack, cachedSearchQuery, 0);
+
+        if (slotId >= 0 && slotId < cachedStacks.length) {
+            cachedStacks[slotId] = stack.copy();
+            cachedMatches[slotId] = match;
+        }
+        return match;
+    }
+
+    @Unique
+    private boolean performDeepSearch(ItemStack stack, String query, int depth) {
+        // ОГРАНИЧЕНИЕ ГЛУБИНЫ: Защита от лагов при бесконечной вложенности из-за модов (Рюкзак в Рюкзак и т.д.)
+        // Уровень 0: Слот инвентаря
+        // Уровень 1: Шалкер
+        // Уровень 2: Мешок в шалкере
+        // Больше 3-х уровней проверять нет смысла, прерываем рекурсию.
+        if (depth > 3 || stack.isEmpty()) return false;
+
+        // Если сам контейнер или предмет подходит под запрос — сразу возвращаем true
+        if (isItemStackMatchingSearch(stack, query)) return true;
+
+        // Если разрешен поиск внутри контейнеров, "проваливаемся" глубже
         if (SearchifyConfig.searchInsideContainers) {
+            // Проверка обычных контейнеров (Шалкеры)
             ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
             if (container != null) {
                 for (ItemStack innerStack : container.iterateNonEmpty()) {
-                    if (isItemStackMatchingSearch(innerStack, cachedSearchQuery)) return true;
+                    // Рекурсивный вызов с увеличением глубины.
+                    // Мгновенно выходим, если нашли.
+                    if (performDeepSearch(innerStack, query, depth + 1)) return true;
                 }
             }
+
+            // Проверка мешков (Bundles)
             BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
             if (bundle != null) {
                 for (ItemStack innerStack : bundle.iterate()) {
-                    if (isItemStackMatchingSearch(innerStack, cachedSearchQuery)) return true;
+                    if (performDeepSearch(innerStack, query, depth + 1)) return true;
                 }
             }
         }
@@ -369,6 +403,8 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "drawSlot", at = @At("HEAD"), cancellable = true)
     private void onDrawSlotHead(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
+        if (!this.isSupportedCache) return;
+
         boolean isMatching = isItemMatchingSearch(slot);
         boolean isSearching = this.searchBox != null && this.searchBox.isVisible() && !this.searchBox.getText().trim().isEmpty();
         boolean hasCursorItem = this.handler != null && !this.handler.getCursorStack().isEmpty();
@@ -406,7 +442,6 @@ public abstract class HandledScreenMixin extends Screen {
             fadeMap.put(slot.id, currentFade);
         }
 
-        // Strict 2D Matrix Rules applied
         if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.ANIMATION) {
             if (currentFade <= 0.0f && slot.hasStack()) {
                 ci.cancel();
@@ -433,6 +468,8 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "drawSlot", at = @At("TAIL"))
     private void onDrawSlotTail(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
+        if (!this.isSupportedCache) return;
+
         if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.GHOST) {
             if (!isItemMatchingSearch(slot) && slot.hasStack()) {
                 context.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, ((int) (SearchifyConfig.ghostAlpha / 100.0f * 255.0f) << 24) | 0x8b8b8b);
