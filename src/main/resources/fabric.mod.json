@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "searchify",
+  "version": "${version}",
+  "name": "Searchify",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/searchify/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.searchify.client.SearchifyClient"
+    ],
+    "main": [
+      "com.searchify.Searchify"
+    ],
+    "modmenu": [
+      "com.searchify.client.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "searchify.mixins.json",
+    {
+      "config": "searchify.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "yet_another_config_lib_v3": ">=3.8.1+1.21.11"
+  }
+}

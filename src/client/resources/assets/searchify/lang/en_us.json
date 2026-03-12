@@ -1,0 +1,53 @@
+{
+  "searchify.config.title": "Searchify Settings",
+  "searchify.config.category.general": "General Settings",
+  "searchify.config.category.general.tooltip": "Main parameters for item searching and highlighting.",
+  "searchify.config.group.behavior": "General",
+  "searchify.config.group.visuals": "Display",
+
+  "searchify.config.enabled.name": "Enable Mod",
+  "searchify.config.enabled.desc": "Fully enables or disables the item search and hiding logic.",
+
+  "searchify.config.displayMode.name": "Highlight Mode",
+  "searchify.config.displayMode.desc": "Choose how items are visualized during a search.\n\n§lPop / Pop-out Animation§r - spring-like shrinking of hidden items.\n§lTexture§r - texture overlay on hidden items.\n§lColor§r - colored background for matched items.\n§lOutline§r - outline around matched items.\n§lScale Animation§r - enlargement of matched items.\n§lTransparency§r - transparency applied to unmatched items.\n\n",
+
+  "searchify.config.animationSpeed.name": "Animation Speed",
+  "searchify.config.animationSpeed.desc": "Only used in Pop / Pop-out Animation or Scale Animation modes.",
+
+  "searchify.config.highlightColor.name": "Color",
+  "searchify.config.highlightColor.desc": "Used only in COLOR and OUTLINE modes.",
+
+  "searchify.config.enum.animation": "Pop / Pop-out Animation",
+  "searchify.config.enum.texture": "Texture",
+  "searchify.config.enum.color": "Color",
+  "searchify.config.enum.outline": "Outline",
+  "searchify.config.enum.pulse": "Scale Animation",
+
+  "searchify.preview.searching": "Searching: \"stone\"",
+  "searchify.preview.empty": "Searching: (empty)",
+
+  "searchify.config.enum.ghost": "Transparency",
+  "searchify.config.ghostAlpha.name": "Transparency (%)",
+  "searchify.config.ghostAlpha.desc": "Only used in Transparency mode.",
+
+  "searchify.config.pulseScale.name": "Scale Animation Strength",
+  "searchify.config.pulseScale.desc": "Only used in Scale Animation mode.",
+  "searchify.config.autoLock.name": "Lock Search Box",
+  "searchify.config.autoLock.desc": "If enabled, the search box will be locked open by default and remember your text even after restarting the game.",
+  "searchify.config.category.guis": "Supported GUIs",
+  "searchify.config.category.guis.tooltip": "Configure which screens will display the search bar",
+  "searchify.config.group.containers": "Supported Blocks",
+  "searchify.config.chest.desc": "Show the search bar in the chest interface.",
+  "searchify.config.barrel.desc": "Show the search bar in the barrel interface.",
+  "searchify.config.enderChest.desc": "Show the search bar in the ender chest interface.",
+  "searchify.config.trappedChest.desc": "Show the search bar in the trapped chest interface.",
+  "searchify.config.copperChest.desc": "Show the search bar in the copper chest interface.",
+  "searchify.config.shulkerBox.desc": "Show the search bar in the shulker box interface.",
+  "searchify.config.searchInside.name": "Search Inside Containers",
+  "searchify.config.searchInside.desc": "If enabled, the search will also check the contents of shulker boxes and bundles present in the inventory.",
+  "searchify.config.keybind.name": "Fast Search Keybind",
+  "searchify.config.keybind.desc": "Press this key while hovering over an item to automatically insert it into the search.",
+  "searchify.message.press_key": "Press any key to bind...",
+  "searchify.message.press_esc_to_cancel": "ESC - Cancel"
+
+}
