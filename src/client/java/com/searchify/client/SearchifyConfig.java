@@ -35,7 +35,7 @@ public class SearchifyConfig {
     public static int animationSpeed = 100;
     public static int highlightColor = 0x00FF00;
     public static int ghostAlpha = 70;
-    public static int pulseScale = 125;
+    public static int pulseScale = 140;
 
     public static boolean enableChests = true;
     public static boolean enableBarrels = true;
@@ -62,7 +62,7 @@ public class SearchifyConfig {
         DisplayMode displayMode = DisplayMode.ANIMATION;
         int animationSpeed = 100;
         int ghostAlpha = 70;
-        int pulseScale = 125;
+        int pulseScale = 140;
         String highlightColor = "#00FF00";
 
         boolean enableChests = true;

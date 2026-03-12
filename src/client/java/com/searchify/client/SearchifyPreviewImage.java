@@ -9,6 +9,8 @@ import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
+import java.util.Arrays;
+
 public class SearchifyPreviewImage implements ImageRenderer {
 
     public static SearchifyConfig.DisplayMode currentMode = SearchifyConfig.displayMode;
@@ -20,23 +22,38 @@ public class SearchifyPreviewImage implements ImageRenderer {
     private static final Identifier SLOT_TEX = Identifier.ofVanilla("container/slot");
     private static final Identifier DISABLED_SLOT_TEX = Identifier.ofVanilla("container/crafter/disabled_slot");
 
-    private final ItemStack[] previewItems = new ItemStack[]{
-            Items.APPLE.getDefaultStack(),
-            Items.STONE.getDefaultStack(),
-            Items.DIAMOND.getDefaultStack(),
-            Items.COBBLESTONE.getDefaultStack(),
-            Items.IRON_INGOT.getDefaultStack(),
-            Items.STONE_BRICKS.getDefaultStack(),
-            Items.STICK.getDefaultStack(),
-            Items.SMOOTH_STONE.getDefaultStack()
-    };
+    private final ItemStack[] previewItems;
+    private final String[] targetQueries;
 
     private float currentFade = 1.0f;
     private boolean isSearching = false;
     private long lastToggleTime = System.currentTimeMillis();
 
+    // Конструктор по умолчанию (стандартная сетка камней)
+    public SearchifyPreviewImage() {
+        this(new ItemStack[]{
+                Items.DIAMOND.getDefaultStack(),
+                Items.COOKED_BEEF.getDefaultStack(),
+                Items.DIAMOND.getDefaultStack(),
+                Items.APPLE.getDefaultStack(),
+                Items.IRON_INGOT.getDefaultStack(),
+                Items.DIAMOND.getDefaultStack(),
+                Items.REDSTONE.getDefaultStack(),
+                Items.DIAMOND.getDefaultStack()
+        }, "diamond");
+    }
+
+    public SearchifyPreviewImage(ItemStack[] items, String... queries) {
+        this.previewItems = items;
+        this.targetQueries = queries;
+    }
+
     private boolean isMatch(ItemStack stack) {
-        return stack.getItem().toString().toLowerCase().contains("stone");
+        String itemName = stack.getItem().toString().toLowerCase();
+        for (String q : targetQueries) {
+            if (itemName.contains(q)) return true;
+        }
+        return false;
     }
 
     private float getAnimationScale(float fade) {
@@ -96,7 +113,8 @@ public class SearchifyPreviewImage implements ImageRenderer {
         int x = startX + (width - gridWidth) / 2;
         int y = startY + 15;
 
-        Text titleText = isSearching ? Text.translatable("searchify.preview.searching") : Text.translatable("searchify.preview.empty");
+        // Динамический текст поиска на основе текущего запроса
+        Text titleText = isSearching ? Text.literal("Searching: \"" + Arrays.toString(targetQueries) + "\"") : Text.translatable("searchify.preview.empty");
         int textWidth = MinecraftClient.getInstance().textRenderer.getWidth(titleText);
         context.drawText(MinecraftClient.getInstance().textRenderer, titleText, startX + (width - textWidth) / 2, y - 12, isSearching ? 0x55FF55 : 0xAAAAAA, false);
 
@@ -108,11 +126,14 @@ public class SearchifyPreviewImage implements ImageRenderer {
             ItemStack stack = previewItems[i];
             boolean match = isMatch(stack);
 
+            // 1. Отрисовка фона слота (самый нижний слой)
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SLOT_TEX, slotX, slotY, slotSize, slotSize);
 
             if (currentMode == SearchifyConfig.DisplayMode.GHOST) {
+                // Предмет рисуется под затемнением
                 context.drawItem(stack, slotX + 1, slotY + 1);
                 if (isSearching && !match) {
+                    // Прозрачность применяется через ARGB цвет в методе fill, без RenderSystem
                     int alpha = (int) (currentGhostAlpha / 100.0f * 255.0f);
                     int dimColor = (alpha << 24) | 0x8b8b8b;
                     context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, dimColor);
@@ -122,6 +143,7 @@ public class SearchifyPreviewImage implements ImageRenderer {
 
             if (currentMode == SearchifyConfig.DisplayMode.COLOR) {
                 if (isSearching && match) {
+                    // Цветовая подложка рисуется ДО предмета
                     context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, currentColor | 0xFF000000);
                 }
                 context.drawItem(stack, slotX + 1, slotY + 1);
@@ -130,6 +152,7 @@ public class SearchifyPreviewImage implements ImageRenderer {
 
             if (currentMode == SearchifyConfig.DisplayMode.OUTLINE) {
                 if (isSearching && match) {
+                    // Обводка рисуется ДО предмета (или после, если нужно перекрыть края)
                     int c = currentColor | 0xFF000000;
                     context.fill(slotX, slotY, slotX + 18, slotY + 1, c);
                     context.fill(slotX, slotY + 17, slotX + 18, slotY + 18, c);
@@ -143,11 +166,13 @@ public class SearchifyPreviewImage implements ImageRenderer {
             if (currentMode == SearchifyConfig.DisplayMode.TEXTURE) {
                 context.drawItem(stack, slotX + 1, slotY + 1);
                 if (isSearching && !match) {
+                    // Текстура-перекрытие рисуется ПОВЕРХ предмета
                     context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, DISABLED_SLOT_TEX, slotX, slotY, slotSize, slotSize);
                 }
                 continue;
             }
 
+            // Анимации Scale и Pop (требуют манипуляций с матрицами)
             float renderScale = 1.0f;
             boolean shouldTransform = false;
 
@@ -164,12 +189,14 @@ public class SearchifyPreviewImage implements ImageRenderer {
                     float itemCenterX = slotX + 9f;
                     float itemCenterY = slotY + 9f;
 
-                    // Matrix usage follows 2.0 flat engine (x, y explicit bounds check)
+                    // Строго 2D-парадигма (без оси Z), используем pushMatrix() и popMatrix()
                     context.getMatrices().pushMatrix();
                     context.getMatrices().translate(itemCenterX, itemCenterY);
                     context.getMatrices().scale(renderScale, renderScale);
                     context.getMatrices().translate(-itemCenterX, -itemCenterY);
+
                     context.drawItem(stack, slotX + 1, slotY + 1);
+
                     context.getMatrices().popMatrix();
                 }
             } else {

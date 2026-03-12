@@ -9,8 +9,11 @@ import dev.isxander.yacl3.api.controller.IntegerSliderControllerBuilder;
 import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 
 import java.awt.Color;
 
@@ -64,7 +67,21 @@ public class ModMenuIntegration implements ModMenuApi {
         SearchifyPreviewImage.currentGhostAlpha = SearchifyConfig.ghostAlpha;
         SearchifyPreviewImage.currentPulseScale = SearchifyConfig.pulseScale;
 
+        // Стандартное превью (сетка 2x4 с камнем) для визуальных настроек
         SearchifyPreviewImage previewImage = new SearchifyPreviewImage();
+
+        // Кастомное превью для опции поиска в контейнерах
+        ItemStack[] containerItems = new ItemStack[]{
+                Items.RED_SHULKER_BOX.getDefaultStack(),
+                Items.DIAMOND.getDefaultStack(),
+                Items.RED_BUNDLE.getDefaultStack(),
+                Items.IRON_INGOT.getDefaultStack(),
+                Items.APPLE.getDefaultStack(),
+                Items.BLUE_SHULKER_BOX.getDefaultStack(),
+                Items.STICK.getDefaultStack(),
+                Items.BLUE_BUNDLE.getDefaultStack()
+        };
+        SearchifyPreviewImage containerPreview = new SearchifyPreviewImage(containerItems, "shulker", "bundle");
 
         Text keyNameText = getCleanKeyName(SearchifyConfig.searchKeybind).copy().formatted(Formatting.YELLOW);
 
@@ -97,7 +114,7 @@ public class ModMenuIntegration implements ModMenuApi {
         Option<Integer> pulseScaleOption = Option.<Integer>createBuilder()
                 .name(Text.translatable("searchify.config.pulseScale.name"))
                 .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.pulseScale.desc")).customImage(previewImage).build())
-                .binding(125, () -> SearchifyConfig.pulseScale, val -> SearchifyConfig.pulseScale = val)
+                .binding(140, () -> SearchifyConfig.pulseScale, val -> SearchifyConfig.pulseScale = val)
                 .available(SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE)
                 .listener((opt, val) -> SearchifyPreviewImage.currentPulseScale = val)
                 .controller(opt -> IntegerSliderControllerBuilder.create(opt).range(100, 200).step(1).formatValue(v -> Text.literal(v + "%"))).build();
@@ -131,18 +148,17 @@ public class ModMenuIntegration implements ModMenuApi {
                         .name(Text.translatable("searchify.config.category.general"))
                         .tooltip(Text.translatable("searchify.config.category.general.tooltip"))
 
-                        // Найдите метод createScreen и обновите блок с OptionGroup (поведение)
-
                         .group(OptionGroup.createBuilder()
                                 .name(Text.translatable("searchify.config.group.behavior"))
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.enabled.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enabled.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enabled.desc")).build())
                                         .binding(true, () -> SearchifyConfig.isEnabled, val -> SearchifyConfig.isEnabled = val)
                                         .controller(TickBoxControllerBuilder::create).build())
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.autoLock.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.autoLock.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.autoLock.desc"))
+                                                .customImage(new IconPreviewImage(Identifier.of("searchify", "lock"))).build())
                                         .binding(false, () -> SearchifyConfig.autoLock, val -> {
                                             SearchifyConfig.autoLock = val;
                                             if (!val) {
@@ -152,23 +168,24 @@ public class ModMenuIntegration implements ModMenuApi {
                                         .controller(TickBoxControllerBuilder::create).build())
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.searchInside.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.searchInside.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.searchInside.desc"))
+                                                .customImage(containerPreview).build())
                                         .binding(true, () -> SearchifyConfig.searchInsideContainers, val -> SearchifyConfig.searchInsideContainers = val)
                                         .controller(TickBoxControllerBuilder::create).build())
-                                // ... (предыдущие настройки поведения)
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.enableHistory.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enableHistory.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enableHistory.desc"))
+                                                .customImage(new IconPreviewImage(Identifier.of("searchify", "history"))).build())
                                         .binding(true, () -> SearchifyConfig.enableHistory, val -> SearchifyConfig.enableHistory = val)
                                         .controller(TickBoxControllerBuilder::create).build())
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.searchInPlayerInventory.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.searchInPlayerInventory.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.searchInPlayerInventory.desc")).build())
                                         .binding(false, () -> SearchifyConfig.searchInPlayerInventory, val -> SearchifyConfig.searchInPlayerInventory = val)
                                         .controller(TickBoxControllerBuilder::create).build())
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.autoFocusSearchBar.name"))
-                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.autoFocusSearchBar.desc")).customImage(previewImage).build())
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.autoFocusSearchBar.desc")).build())
                                         .binding(false, () -> SearchifyConfig.autoFocusSearchBar, val -> SearchifyConfig.autoFocusSearchBar = val)
                                         .controller(TickBoxControllerBuilder::create).build())
                                 .option(keybindButton)
