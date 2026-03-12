@@ -1,6 +1,7 @@
 package com.searchify.client.mixin;
 
 import com.searchify.client.SearchifyConfig;
+import com.searchify.util.ItemSearchEngine;
 import it.unimi.dsi.fastutil.ints.Int2FloatMap;
 import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
 import net.minecraft.client.gui.DrawContext;
@@ -12,16 +13,8 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.BundleContentsComponent;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.registry.Registries;
-import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.sound.SoundEvents;
@@ -39,7 +32,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.gui.Click;
 import net.minecraft.entity.player.PlayerInventory;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @Mixin(HandledScreen.class)
@@ -71,17 +64,16 @@ public abstract class HandledScreenMixin extends Screen {
     @Unique private boolean isHistoryOpen = false;
     @Unique private int currentBgWidth = 80;
     @Unique private float currentDeltaTicks = 1.0f;
-
-    // Переменная для пружинистой анимации (1.0 = состояние покоя)
     @Unique private float historyAnimProgress = 1.0f;
 
     @Unique private final Int2FloatMap fadeMap = new Int2FloatOpenHashMap();
-
     @Unique private String cachedSearchQuery = "";
     @Unique private String lastRawQuery = "";
-    @Unique private String cacheGlobalQuery = null;
+
+    // Memory Cache
     @Unique private final ItemStack[] cachedStacks = new ItemStack[300];
     @Unique private final boolean[] cachedMatches = new boolean[300];
+    @Unique private final List<Text> cachedHistoryTexts = new ArrayList<>();
 
     protected HandledScreenMixin(Text title) {
         super(title);
@@ -124,18 +116,25 @@ public abstract class HandledScreenMixin extends Screen {
         }
     }
 
+    @Unique
+    private void updateHistoryCache() {
+        this.cachedHistoryTexts.clear();
+        for (String s : SearchifyConfig.searchHistory) {
+            this.cachedHistoryTexts.add(Text.literal(s));
+        }
+    }
+
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         this.isSupportedCache = !checkUnsupportedScreen();
-        if (!this.isSupportedCache) return;
-
-        if (!SearchifyConfig.isEnabled) {
+        if (!this.isSupportedCache || !SearchifyConfig.isEnabled) {
             this.searchBox = null;
             return;
         }
 
+        updateHistoryCache();
+
         String savedText = SearchifyConfig.autoLock ? SearchifyConfig.savedSearchQuery : "";
-        // ЕСЛИ autoFocusSearchBar ВКЛЮЧЕН — СТРОКА СРАЗУ ВИДИМА И АКТИВНА
         boolean wasVisible = SearchifyConfig.autoLock || SearchifyConfig.autoFocusSearchBar;
         boolean wasFocused = SearchifyConfig.autoFocusSearchBar;
 
@@ -189,10 +188,7 @@ public abstract class HandledScreenMixin extends Screen {
                     SearchifyConfig.searchHistory = SearchifyConfig.searchHistory.subList(0, 5);
                 }
             }
-
-            if (SearchifyConfig.autoLock) {
-                SearchifyConfig.savedSearchQuery = this.searchBox.getText();
-            }
+            if (SearchifyConfig.autoLock) SearchifyConfig.savedSearchQuery = this.searchBox.getText();
             SearchifyConfig.save();
         }
     }
@@ -210,7 +206,7 @@ public abstract class HandledScreenMixin extends Screen {
 
         if (!this.searchBox.isVisible()) {
             int buttonX = this.x + this.backgroundWidth - BTN_SIZE - 7;
-            boolean isHovered = mouseX >= buttonX && mouseY >= startY && mouseX < buttonX + BTN_SIZE && mouseY < startY + BTN_SIZE;
+            boolean isHovered = isHovering(mouseX, mouseY, buttonX, startY, BTN_SIZE, BTN_SIZE);
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, isHovered ? TEX_SEARCH_HIGHLIGHT : TEX_SEARCH, buttonX, startY, BTN_SIZE, BTN_SIZE);
         } else {
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
@@ -221,20 +217,14 @@ public abstract class HandledScreenMixin extends Screen {
         if (SearchifyConfig.enableHistory) {
             int historyX = this.x + this.backgroundWidth + 1;
             int historyY = startY + 1;
-            // Логика анимации сжатия
             float scale = 1.0f;
+
             if (this.historyAnimProgress < 1.0f) {
-                // Слегка ускоряем шаг анимации, так как теперь движение короче (без долгой раскачки)
                 this.historyAnimProgress += 0.15f * currentDeltaTicks;
                 if (this.historyAnimProgress > 1.0f) this.historyAnimProgress = 1.0f;
-
-                float t = this.historyAnimProgress;
-                // Формула: берем половину синусоиды (плавный подъем и спад) и ВЫЧИТАЕМ ее.
-                // 0.25f — это сила сжатия (иконка уменьшится максимум до 75% от своего размера).
-                scale = 1.0f - (float) (Math.sin(t * Math.PI)) * 0.15f;
+                scale = 1.0f - (float) (Math.sin(this.historyAnimProgress * Math.PI)) * 0.15f;
             }
 
-            // Рендер иконки с учетом анимации
             if (scale != 1.0f) {
                 context.getMatrices().pushMatrix();
                 float centerX = historyX + HISTORY_SIZE / 2.0f;
@@ -246,29 +236,21 @@ public abstract class HandledScreenMixin extends Screen {
 
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, TEX_HISTORY, historyX, historyY, HISTORY_SIZE, HISTORY_SIZE);
 
-            if (scale != 1.0f) {
-                context.getMatrices().popMatrix();
-            }
+            if (scale != 1.0f) context.getMatrices().popMatrix();
 
-            if (this.isHistoryOpen && !SearchifyConfig.searchHistory.isEmpty()) {
-                int maxTextWidth = 0;
-                for (String s : SearchifyConfig.searchHistory) {
-                    int w = this.textRenderer.getWidth(s);
-                    if (w > maxTextWidth) maxTextWidth = w;
-                }
+            if (this.isHistoryOpen && !this.cachedHistoryTexts.isEmpty()) {
+                int maxTextWidth = this.cachedHistoryTexts.stream().mapToInt(this.textRenderer::getWidth).max().orElse(0);
                 int dropDownWidth = maxTextWidth + 8;
                 int textHeight = 12;
-                int listHeight = SearchifyConfig.searchHistory.size() * textHeight + 4;
+                int listHeight = this.cachedHistoryTexts.size() * textHeight + 4;
 
                 context.fill(historyX, historyY + HISTORY_SIZE + 2, historyX + dropDownWidth, historyY + HISTORY_SIZE + 2 + listHeight, 0x88000000);
 
                 int currentY = historyY + HISTORY_SIZE + 4;
-                for (String historyItem : SearchifyConfig.searchHistory) {
-                    boolean isHovered = mouseX >= historyX && mouseX <= historyX + dropDownWidth && mouseY >= currentY && mouseY < currentY + textHeight;
-                    Text textToDraw = Text.literal(historyItem);
-                    if (isHovered) {
-                        textToDraw = textToDraw.copy().formatted(Formatting.UNDERLINE);
-                    }
+                for (int i = 0; i < this.cachedHistoryTexts.size(); i++) {
+                    boolean isHovered = isHovering(mouseX, mouseY, historyX, currentY, dropDownWidth, textHeight);
+                    Text textToDraw = this.cachedHistoryTexts.get(i);
+                    if (isHovered) textToDraw = textToDraw.copy().formatted(Formatting.UNDERLINE);
                     context.drawTextWithShadow(this.textRenderer, textToDraw, historyX + 4, currentY + 2, isHovered ? 0xFFFFFFFF : 0xFFAAAAAA);
                     currentY += textHeight;
                 }
@@ -276,43 +258,40 @@ public abstract class HandledScreenMixin extends Screen {
         }
     }
 
+    @Unique
+    private boolean isHovering(double mouseX, double mouseY, int x, int y, int width, int height) {
+        return mouseX >= x && mouseY >= y && mouseX < x + width && mouseY < y + height;
+    }
+
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(Click click, boolean doubled, CallbackInfoReturnable<Boolean> cir) {
-        // Разрешаем только ЛКМ (0) и ПКМ (1)
         if (!this.isSupportedCache || this.searchBox == null || (click.button() != 0 && click.button() != 1)) return;
 
         double mouseX = click.x();
         double mouseY = click.y();
-        int button = click.button();
         int startY = this.y + 4;
         int padding = 3;
 
-        // --- ОБРАБОТКА ПКМ (Быстрая очистка) ---
-        if (button == 1) {
-            if (this.searchBox.isVisible()) {
-                if (mouseX >= this.searchBox.getX() - 2 && mouseX <= this.searchBox.getX() + this.currentBgWidth &&
-                        mouseY >= this.searchBox.getY() - 2 && mouseY <= this.searchBox.getY() + BG_HEIGHT + 2) {
-                    playClickSound();
-                    this.searchBox.setText("");
-                    if (SearchifyConfig.autoLock) {
-                        SearchifyConfig.savedSearchQuery = "";
-                        SearchifyConfig.save();
-                    }
-                    this.lastRawQuery = "";
-                    this.cachedSearchQuery = "";
-                    cir.setReturnValue(true);
+        if (click.button() == 1) {
+            if (this.searchBox.isVisible() && isHovering(mouseX, mouseY, this.searchBox.getX() - 2, this.searchBox.getY() - 2, this.currentBgWidth + 4, BG_HEIGHT + 4)) {
+                playClickSound();
+                this.searchBox.setText("");
+                if (SearchifyConfig.autoLock) {
+                    SearchifyConfig.savedSearchQuery = "";
+                    SearchifyConfig.save();
                 }
+                this.lastRawQuery = "";
+                this.cachedSearchQuery = "";
+                cir.setReturnValue(true);
             }
-            return; // Завершаем обработку для ПКМ
+            return;
         }
 
-        // --- ОБРАБОТКА ЛКМ (Стандартная) ---
         if (SearchifyConfig.enableHistory) {
             int historyX = this.x + this.backgroundWidth + 1;
             int historyY = startY + 1;
 
-            if (mouseX >= (historyX - padding) && mouseY >= (historyY - padding) &&
-                    mouseX < (historyX + HISTORY_SIZE + padding) && mouseY < (historyY + HISTORY_SIZE + padding)) {
+            if (isHovering(mouseX, mouseY, historyX - padding, historyY - padding, HISTORY_SIZE + padding * 2, HISTORY_SIZE + padding * 2)) {
                 playClickSound();
                 this.isHistoryOpen = !this.isHistoryOpen;
                 cir.setReturnValue(true);
@@ -320,19 +299,14 @@ public abstract class HandledScreenMixin extends Screen {
             }
 
             if (this.isHistoryOpen && !SearchifyConfig.searchHistory.isEmpty()) {
-                int maxTextWidth = 0;
-                for (String s : SearchifyConfig.searchHistory) {
-                    int w = this.textRenderer.getWidth(s);
-                    if (w > maxTextWidth) maxTextWidth = w;
-                }
+                int maxTextWidth = this.cachedHistoryTexts.stream().mapToInt(this.textRenderer::getWidth).max().orElse(0);
                 int dropDownWidth = maxTextWidth + 8;
                 int textHeight = 12;
                 int currentY = historyY + HISTORY_SIZE + 4;
 
                 for (String historyItem : SearchifyConfig.searchHistory) {
-                    if (mouseX >= historyX && mouseX <= historyX + dropDownWidth && mouseY >= currentY && mouseY < currentY + textHeight) {
+                    if (isHovering(mouseX, mouseY, historyX, currentY, dropDownWidth, textHeight)) {
                         playClickSound();
-
                         if (!this.searchBox.isVisible()) {
                             this.searchBox.setVisible(true);
                             this.searchBox.active = true;
@@ -347,8 +321,6 @@ public abstract class HandledScreenMixin extends Screen {
                         }
                         this.lastRawQuery = historyItem;
                         this.cachedSearchQuery = historyItem.trim().toLowerCase();
-
-                        // Запускаем пружинистую анимацию иконки!
                         this.historyAnimProgress = 0.0f;
                         this.isHistoryOpen = false;
 
@@ -362,7 +334,7 @@ public abstract class HandledScreenMixin extends Screen {
 
         if (!this.searchBox.isVisible()) {
             int buttonX = this.x + this.backgroundWidth - BTN_SIZE - 7;
-            if (mouseX >= buttonX && mouseY >= startY && mouseX < buttonX + BTN_SIZE && mouseY < startY + BTN_SIZE) {
+            if (isHovering(mouseX, mouseY, buttonX, startY, BTN_SIZE, BTN_SIZE)) {
                 playClickSound();
                 this.searchBox.setVisible(true);
                 this.searchBox.active = true;
@@ -374,8 +346,7 @@ public abstract class HandledScreenMixin extends Screen {
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
             int lockY = startY + (BG_HEIGHT - LOCK_SIZE) / 2;
 
-            if (mouseX >= (lockX - padding) && mouseY >= (lockY - padding) &&
-                    mouseX < (lockX + LOCK_SIZE + padding) && mouseY < (lockY + LOCK_SIZE + padding)) {
+            if (isHovering(mouseX, mouseY, lockX - padding, lockY - padding, LOCK_SIZE + padding * 2, LOCK_SIZE + padding * 2)) {
                 playClickSound();
                 SearchifyConfig.autoLock = !SearchifyConfig.autoLock;
                 SearchifyConfig.savedSearchQuery = SearchifyConfig.autoLock ? this.searchBox.getText() : "";
@@ -387,9 +358,9 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyInput input, CallbackInfoReturnable<Boolean> cir) {
-        if (!this.isSupportedCache) return;
+        if (!this.isSupportedCache || this.searchBox == null) return;
 
-        if (this.searchBox != null && this.searchBox.isFocused() && this.searchBox.isVisible()) {
+        if (this.searchBox.isFocused() && this.searchBox.isVisible()) {
             if (this.searchBox.keyPressed(input)) {
                 cir.setReturnValue(true);
             } else if (this.client != null && (
@@ -398,20 +369,17 @@ public abstract class HandledScreenMixin extends Screen {
                             this.client.options.swapHandsKey.matchesKey(input))) {
                 cir.setReturnValue(true);
             }
-        } else if (this.searchBox != null) {
+        } else {
             int targetKeyCode = net.minecraft.client.util.InputUtil.fromTranslationKey(SearchifyConfig.searchKeybind).getCode();
 
             if (input.key() == targetKeyCode && this.focusedSlot != null && this.focusedSlot.hasStack()) {
                 ItemStack stack = this.focusedSlot.getStack();
                 String localizedName = stack.getName().getString();
 
-                // Открываем строку и вставляем название предмета
                 this.searchBox.setVisible(true);
                 this.searchBox.active = true;
                 this.searchBox.setText(localizedName);
 
-                // Больше не включаем авто-блокировку принудительно.
-                // Обновляем сохраненный текст только если замочек УЖЕ включен игроком.
                 if (SearchifyConfig.autoLock) {
                     SearchifyConfig.savedSearchQuery = localizedName;
                     SearchifyConfig.save();
@@ -434,7 +402,6 @@ public abstract class HandledScreenMixin extends Screen {
         }
 
         String rawQuery = this.searchBox.getText();
-
         if (!rawQuery.equals(lastRawQuery)) {
             lastRawQuery = rawQuery;
             cachedSearchQuery = rawQuery.trim().toLowerCase();
@@ -446,112 +413,25 @@ public abstract class HandledScreenMixin extends Screen {
         ItemStack stack = slot.getStack();
         int slotId = slot.id;
 
-        if (!cachedSearchQuery.equals(cacheGlobalQuery)) {
-            cacheGlobalQuery = cachedSearchQuery;
-            Arrays.fill(cachedStacks, null);
-        }
-
+        // Pointer-based validation
         if (slotId >= 0 && slotId < cachedStacks.length) {
-            if (cachedStacks[slotId] != null && ItemStack.areEqual(stack, cachedStacks[slotId])) {
+            if (cachedStacks[slotId] == stack) {
                 return cachedMatches[slotId];
             }
         }
 
-        boolean match = performDeepSearch(stack, cachedSearchQuery, 0);
+        boolean match = ItemSearchEngine.matches(stack, cachedSearchQuery);
 
         if (slotId >= 0 && slotId < cachedStacks.length) {
-            cachedStacks[slotId] = stack.copy();
+            cachedStacks[slotId] = stack;
             cachedMatches[slotId] = match;
         }
         return match;
     }
 
-    @Unique
-    private boolean performDeepSearch(ItemStack stack, String query, int depth) {
-        if (depth > 3 || stack.isEmpty()) return false;
-        if (isItemStackMatchingSearch(stack, query)) return true;
-
-        if (SearchifyConfig.searchInsideContainers) {
-            ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
-            if (container != null) {
-                for (ItemStack innerStack : container.iterateNonEmpty()) {
-                    if (performDeepSearch(innerStack, query, depth + 1)) return true;
-                }
-            }
-
-            BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
-            if (bundle != null) {
-                for (ItemStack innerStack : bundle.iterate()) {
-                    if (performDeepSearch(innerStack, query, depth + 1)) return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    @Unique
-    private boolean isItemStackMatchingSearch(ItemStack stack, String query) {
-        if (stack.isEmpty()) return false;
-
-        if (query.startsWith("#")) {
-            String modQuery = query.substring(1).trim();
-            return modQuery.isEmpty() || Registries.ITEM.getId(stack.getItem()).getNamespace().contains(modQuery);
-        }
-
-        if (query.startsWith("$")) {
-            String tagQuery = query.substring(1).trim();
-            if (tagQuery.isEmpty()) return true;
-            return stack.streamTags().anyMatch(tag -> tag.id().getPath().contains(tagQuery) || tag.id().getPath().replace('_', ' ').contains(tagQuery));
-        }
-
-        if (query.startsWith("@")) {
-            String tooltipQuery = query.substring(1).trim();
-            return tooltipQuery.isEmpty() || searchInTooltip(stack, tooltipQuery) || searchInEnchantments(stack, tooltipQuery);
-        }
-
-        if (stack.getName().getString().toLowerCase().contains(query)) return true;
-        String itemId = Registries.ITEM.getId(stack.getItem()).getPath();
-        if (itemId.contains(query) || itemId.replace('_', ' ').contains(query)) return true;
-
-        return searchInTooltip(stack, query) || searchInEnchantments(stack, query);
-    }
-
-    @Unique
-    private boolean searchInTooltip(ItemStack stack, String query) {
-        if (this.client == null || this.client.player == null) return false;
-        try {
-            List<Text> tooltip = stack.getTooltip(Item.TooltipContext.DEFAULT, this.client.player, TooltipType.BASIC);
-            for (Text line : tooltip) {
-                if (line.getString().toLowerCase().contains(query)) return true;
-            }
-        } catch (Exception ignored) {}
-        return false;
-    }
-
-    @Unique
-    private boolean searchInEnchantments(ItemStack stack, String query) {
-        ItemEnchantmentsComponent enchantments = stack.get(DataComponentTypes.ENCHANTMENTS);
-        if (enchantments != null && checkEnchantments(enchantments, query)) return true;
-
-        ItemEnchantmentsComponent storedEnchantments = stack.get(DataComponentTypes.STORED_ENCHANTMENTS);
-        return storedEnchantments != null && checkEnchantments(storedEnchantments, query);
-    }
-
-    @Unique
-    private boolean checkEnchantments(ItemEnchantmentsComponent component, String query) {
-        for (RegistryEntry<Enchantment> entry : component.getEnchantments()) {
-            if (entry.getKey().isPresent()) {
-                String id = entry.getKey().get().getValue().getPath();
-                if (id.contains(query) || id.replace('_', ' ').contains(query)) return true;
-            }
-        }
-        return false;
-    }
-
     @Inject(method = "drawSlot", at = @At("HEAD"), cancellable = true)
     private void onDrawSlotHead(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
         if (!this.isSupportedCache) return;
-
         if (!SearchifyConfig.searchInPlayerInventory && slot.inventory instanceof PlayerInventory) return;
 
         boolean isMatching = isItemMatchingSearch(slot);
@@ -618,7 +498,6 @@ public abstract class HandledScreenMixin extends Screen {
     @Inject(method = "drawSlot", at = @At("TAIL"))
     private void onDrawSlotTail(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
         if (!this.isSupportedCache) return;
-
         if (!SearchifyConfig.searchInPlayerInventory && slot.inventory instanceof PlayerInventory) return;
 
         if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.GHOST) {
@@ -629,12 +508,14 @@ public abstract class HandledScreenMixin extends Screen {
             if (!isItemMatchingSearch(slot)) {
                 context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, DISABLED_SLOT_TEX, slot.x - 1, slot.y - 1, 18, 18);
             }
-        } else if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.ANIMATION) {
-            float currentFade = fadeMap.getOrDefault(slot.id, 1.0f);
-            if (currentFade > 0.0f && currentFade < 1.0f && slot.hasStack()) context.getMatrices().popMatrix();
-        } else if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE) {
-            float currentFade = fadeMap.getOrDefault(slot.id, 0.0f);
-            if (currentFade > 0.0f && slot.hasStack()) context.getMatrices().popMatrix();
+        } else if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.ANIMATION || SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE) {
+            float defaultFade = SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE ? 0.0f : 1.0f;
+            float currentFade = fadeMap.getOrDefault(slot.id, defaultFade);
+            if (currentFade > 0.0f && currentFade < 1.0f && slot.hasStack() && SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.ANIMATION) {
+                context.getMatrices().popMatrix();
+            } else if (currentFade > 0.0f && slot.hasStack() && SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE) {
+                context.getMatrices().popMatrix();
+            }
         }
     }
 }

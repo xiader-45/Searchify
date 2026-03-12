@@ -14,15 +14,13 @@ public class IconPreviewImage implements ImageRenderer {
 
     @Override
     public int render(DrawContext context, int startX, int startY, int width, float deltaTicks) {
-        // Увеличиваем размер до 40x40 для хорошей видимости.
-        // drawGuiTexture автоматически использует Nearest-Neighbor фильтрацию, оставляя пиксели четкими.
         int size = 40;
         int x = startX + (width - size) / 2;
         int y = startY + 15;
 
         context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, iconId, x, y, size, size);
 
-        return 70; // Высота блока превью
+        return 70;
     }
 
     @Override

@@ -25,8 +25,8 @@ public class SearchifyConfig {
     public static String savedSearchQuery = "";
     public static boolean searchInsideContainers = true;
     public static boolean enableHistory = true;
-    public static boolean searchInPlayerInventory = false; // НОВЫЙ ПАРАМЕТР
-    public static boolean autoFocusSearchBar = false;     // НОВЫЙ ПАРАМЕТР
+    public static boolean searchInPlayerInventory = false;
+    public static boolean autoFocusSearchBar = false;
     public static List<String> searchHistory = new ArrayList<>();
 
     public static String searchKeybind = "key.keyboard.g";
@@ -82,8 +82,6 @@ public class SearchifyConfig {
                     autoLock = data.autoLock;
                     searchInsideContainers = data.searchInsideContainers;
                     enableHistory = data.enableHistory;
-
-                    // Загрузка новых параметров (с защитой от старых конфигов)
                     searchInPlayerInventory = data.searchInPlayerInventory;
                     autoFocusSearchBar = data.autoFocusSearchBar;
 

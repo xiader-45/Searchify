@@ -67,10 +67,8 @@ public class ModMenuIntegration implements ModMenuApi {
         SearchifyPreviewImage.currentGhostAlpha = SearchifyConfig.ghostAlpha;
         SearchifyPreviewImage.currentPulseScale = SearchifyConfig.pulseScale;
 
-        // Стандартное превью (сетка 2x4 с камнем) для визуальных настроек
         SearchifyPreviewImage previewImage = new SearchifyPreviewImage();
 
-        // Кастомное превью для опции поиска в контейнерах
         ItemStack[] containerItems = new ItemStack[]{
                 Items.RED_SHULKER_BOX.getDefaultStack(),
                 Items.DIAMOND.getDefaultStack(),

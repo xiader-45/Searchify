@@ -9,8 +9,6 @@ import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
-import java.util.Arrays;
-
 public class SearchifyPreviewImage implements ImageRenderer {
 
     public static SearchifyConfig.DisplayMode currentMode = SearchifyConfig.displayMode;
@@ -29,7 +27,6 @@ public class SearchifyPreviewImage implements ImageRenderer {
     private boolean isSearching = false;
     private long lastToggleTime = System.currentTimeMillis();
 
-    // Конструктор по умолчанию (стандартная сетка камней)
     public SearchifyPreviewImage() {
         this(new ItemStack[]{
                 Items.DIAMOND.getDefaultStack(),
@@ -76,12 +73,10 @@ public class SearchifyPreviewImage implements ImageRenderer {
         float extra = maxScale - 1.0f;
 
         if (progress < 0.6f) {
-            float t = progress / 0.6f;
-            t = (float) Math.sin(t * Math.PI / 2.0);
+            float t = (float) Math.sin((progress / 0.6f) * Math.PI / 2.0);
             return 1.0f + (t * extra);
         } else {
-            float t = (progress - 0.6f) / 0.4f;
-            t = 0.5f - 0.5f * (float) Math.cos(t * Math.PI);
+            float t = 0.5f - 0.5f * (float) Math.cos(((progress - 0.6f) / 0.4f) * Math.PI);
             return maxScale - (t * (extra * 0.4f));
         }
     }
@@ -96,14 +91,8 @@ public class SearchifyPreviewImage implements ImageRenderer {
 
         float targetFade = isSearching ? 0.0f : 1.0f;
         if (currentFade != targetFade) {
-            float speedMultiplier = 0.3f * (currentSpeed / 100.0f);
-            float step = speedMultiplier * deltaTicks;
-
-            if (isSearching) {
-                currentFade = Math.max(currentFade - step, 0.0f);
-            } else {
-                currentFade = Math.min(currentFade + step, 1.0f);
-            }
+            float step = 0.3f * (currentSpeed / 100.0f) * deltaTicks;
+            currentFade = isSearching ? Math.max(currentFade - step, 0.0f) : Math.min(currentFade + step, 1.0f);
         }
 
         int cols = 4;
@@ -113,8 +102,6 @@ public class SearchifyPreviewImage implements ImageRenderer {
         int x = startX + (width - gridWidth) / 2;
         int y = startY + 15;
 
-        // Динамический текст поиска на основе текущего запроса
-        // Меняем хардкод на использование локализации с подстановкой:
         Text titleText = isSearching ? Text.translatable("searchify.preview.searching", (Object) targetQueries) : Text.translatable("searchify.preview.empty");
         int textWidth = MinecraftClient.getInstance().textRenderer.getWidth(titleText);
         context.drawText(MinecraftClient.getInstance().textRenderer, titleText, startX + (width - textWidth) / 2, y - 12, isSearching ? 0x55FF55 : 0xAAAAAA, false);
@@ -127,81 +114,66 @@ public class SearchifyPreviewImage implements ImageRenderer {
             ItemStack stack = previewItems[i];
             boolean match = isMatch(stack);
 
-            // 1. Отрисовка фона слота (самый нижний слой)
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SLOT_TEX, slotX, slotY, slotSize, slotSize);
 
-            if (currentMode == SearchifyConfig.DisplayMode.GHOST) {
-                // Предмет рисуется под затемнением
-                context.drawItem(stack, slotX + 1, slotY + 1);
-                if (isSearching && !match) {
-                    // Прозрачность применяется через ARGB цвет в методе fill, без RenderSystem
-                    int alpha = (int) (currentGhostAlpha / 100.0f * 255.0f);
-                    int dimColor = (alpha << 24) | 0x8b8b8b;
-                    context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, dimColor);
-                }
-                continue;
-            }
-
-            if (currentMode == SearchifyConfig.DisplayMode.COLOR) {
-                if (isSearching && match) {
-                    // Цветовая подложка рисуется ДО предмета
-                    context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, currentColor | 0xFF000000);
-                }
-                context.drawItem(stack, slotX + 1, slotY + 1);
-                continue;
-            }
-
-            if (currentMode == SearchifyConfig.DisplayMode.OUTLINE) {
-                if (isSearching && match) {
-                    // Обводка рисуется ДО предмета (или после, если нужно перекрыть края)
-                    int c = currentColor | 0xFF000000;
-                    context.fill(slotX, slotY, slotX + 18, slotY + 1, c);
-                    context.fill(slotX, slotY + 17, slotX + 18, slotY + 18, c);
-                    context.fill(slotX, slotY + 1, slotX + 1, slotY + 17, c);
-                    context.fill(slotX + 17, slotY + 1, slotX + 18, slotY + 17, c);
-                }
-                context.drawItem(stack, slotX + 1, slotY + 1);
-                continue;
-            }
-
-            if (currentMode == SearchifyConfig.DisplayMode.TEXTURE) {
-                context.drawItem(stack, slotX + 1, slotY + 1);
-                if (isSearching && !match) {
-                    // Текстура-перекрытие рисуется ПОВЕРХ предмета
-                    context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, DISABLED_SLOT_TEX, slotX, slotY, slotSize, slotSize);
-                }
-                continue;
-            }
-
-            // Анимации Scale и Pop (требуют манипуляций с матрицами)
-            float renderScale = 1.0f;
-            boolean shouldTransform = false;
-
-            if (currentMode == SearchifyConfig.DisplayMode.ANIMATION && !match) {
-                renderScale = getAnimationScale(currentFade);
-                shouldTransform = true;
-            } else if (currentMode == SearchifyConfig.DisplayMode.PULSE && match) {
-                renderScale = getPulseScale(currentFade);
-                shouldTransform = true;
-            }
-
-            if (shouldTransform) {
-                if (renderScale > 0.0f) {
-                    float itemCenterX = slotX + 9f;
-                    float itemCenterY = slotY + 9f;
-
-                    // Строго 2D-парадигма (без оси Z), используем pushMatrix() и popMatrix()
-                    context.getMatrices().pushMatrix();
-                    context.getMatrices().translate(itemCenterX, itemCenterY);
-                    context.getMatrices().scale(renderScale, renderScale);
-                    context.getMatrices().translate(-itemCenterX, -itemCenterY);
-
+            switch (currentMode) {
+                case GHOST -> {
                     context.drawItem(stack, slotX + 1, slotY + 1);
-
-                    context.getMatrices().popMatrix();
+                    if (isSearching && !match) {
+                        int dimColor = ((int) (currentGhostAlpha / 100.0f * 255.0f) << 24) | 0x8b8b8b;
+                        context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, dimColor);
+                    }
                 }
-            } else {
-                context.drawItem(stack, slotX + 1, slotY + 1);
+                case COLOR -> {
+                    if (isSearching && match) {
+                        context.fill(slotX + 1, slotY + 1, slotX + 17, slotY + 17, currentColor | 0xFF000000);
+                    }
+                    context.drawItem(stack, slotX + 1, slotY + 1);
+                }
+                case OUTLINE -> {
+                    if (isSearching && match) {
+                        int c = currentColor | 0xFF000000;
+                        context.fill(slotX, slotY, slotX + 18, slotY + 1, c);
+                        context.fill(slotX, slotY + 17, slotX + 18, slotY + 18, c);
+                        context.fill(slotX, slotY + 1, slotX + 1, slotY + 17, c);
+                        context.fill(slotX + 17, slotY + 1, slotX + 18, slotY + 17, c);
+                    }
+                    context.drawItem(stack, slotX + 1, slotY + 1);
+                }
+                case TEXTURE -> {
+                    context.drawItem(stack, slotX + 1, slotY + 1);
+                    if (isSearching && !match) {
+                        context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, DISABLED_SLOT_TEX, slotX, slotY, slotSize, slotSize);
+                    }
+                }
+                case ANIMATION, PULSE -> {
+                    float renderScale = 1.0f;
+                    boolean shouldTransform = false;
+
+                    if (currentMode == SearchifyConfig.DisplayMode.ANIMATION && !match) {
+                        renderScale = getAnimationScale(currentFade);
+                        shouldTransform = true;
+                    } else if (currentMode == SearchifyConfig.DisplayMode.PULSE && match) {
+                        renderScale = getPulseScale(currentFade);
+                        shouldTransform = true;
+                    }
+
+                    if (shouldTransform) {
+                        if (renderScale > 0.0f) {
+                            float itemCenterX = slotX + 9f;
+                            float itemCenterY = slotY + 9f;
+
+                            context.getMatrices().pushMatrix();
+                            context.getMatrices().translate(itemCenterX, itemCenterY);
+                            context.getMatrices().scale(renderScale, renderScale);
+                            context.getMatrices().translate(-itemCenterX, -itemCenterY);
+                            context.drawItem(stack, slotX + 1, slotY + 1);
+                            context.getMatrices().popMatrix();
+                        }
+                    } else {
+                        context.drawItem(stack, slotX + 1, slotY + 1);
+                    }
+                }
             }
         }
 
