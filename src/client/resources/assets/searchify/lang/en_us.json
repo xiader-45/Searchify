@@ -48,6 +48,7 @@
   "searchify.config.keybind.name": "Fast Search Keybind",
   "searchify.config.keybind.desc": "Press this key while hovering over an item to automatically insert it into the search.",
   "searchify.message.press_key": "Press any key to bind...",
-  "searchify.message.press_esc_to_cancel": "ESC - Cancel"
-
+  "searchify.message.press_esc_to_cancel": "ESC - Cancel",
+  "searchify.config.enableHistory.name": "Search History",
+  "searchify.config.enableHistory.desc": "Displays a history button next to the search bar to access the last 5 queries."
 }

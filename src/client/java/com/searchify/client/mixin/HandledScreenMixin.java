@@ -26,6 +26,7 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -56,21 +57,25 @@ public abstract class HandledScreenMixin extends Screen {
     @Unique private static final Identifier TEX_SEARCH_HIGHLIGHT = Identifier.of("searchify", "search_highlight");
     @Unique private static final Identifier TEX_LOCK = Identifier.of("searchify", "lock");
     @Unique private static final Identifier TEX_UNLOCK = Identifier.of("searchify", "unlock");
+    @Unique private static final Identifier TEX_HISTORY = Identifier.of("searchify", "history");
     @Unique private static final Identifier DISABLED_SLOT_TEX = Identifier.ofVanilla("container/crafter/disabled_slot");
 
     @Unique private static final int MAX_BG_WIDTH = 80;
     @Unique private static final int BG_HEIGHT = 12;
     @Unique private static final int BTN_SIZE = 12;
     @Unique private static final int LOCK_SIZE = 5;
+    @Unique private static final int HISTORY_SIZE = 10;
 
     @Unique private boolean isSupportedCache = false;
+    @Unique private boolean isHistoryOpen = false;
     @Unique private int currentBgWidth = 80;
     @Unique private float currentDeltaTicks = 1.0f;
 
-    // Efficient primitive map to prevent auto-boxing memory leaks
+    // Переменная для пружинистой анимации (1.0 = состояние покоя)
+    @Unique private float historyAnimProgress = 1.0f;
+
     @Unique private final Int2FloatMap fadeMap = new Int2FloatOpenHashMap();
 
-    // High-performance search caching structures
     @Unique private String cachedSearchQuery = "";
     @Unique private String lastRawQuery = "";
     @Unique private String cacheGlobalQuery = null;
@@ -173,8 +178,19 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Inject(method = "removed", at = @At("HEAD"))
     private void onRemoved(CallbackInfo ci) {
-        if (SearchifyConfig.isEnabled && SearchifyConfig.autoLock && this.searchBox != null) {
-            SearchifyConfig.savedSearchQuery = this.searchBox.getText();
+        if (SearchifyConfig.isEnabled && this.searchBox != null) {
+            String currentText = this.searchBox.getText().trim();
+            if (!currentText.isEmpty() && SearchifyConfig.enableHistory) {
+                SearchifyConfig.searchHistory.remove(currentText);
+                SearchifyConfig.searchHistory.add(0, currentText);
+                if (SearchifyConfig.searchHistory.size() > 5) {
+                    SearchifyConfig.searchHistory = SearchifyConfig.searchHistory.subList(0, 5);
+                }
+            }
+
+            if (SearchifyConfig.autoLock) {
+                SearchifyConfig.savedSearchQuery = this.searchBox.getText();
+            }
             SearchifyConfig.save();
         }
     }
@@ -189,25 +205,158 @@ public abstract class HandledScreenMixin extends Screen {
         if (!this.isSupportedCache || this.searchBox == null) return;
 
         int startY = this.y + 4;
+
         if (!this.searchBox.isVisible()) {
             int buttonX = this.x + this.backgroundWidth - BTN_SIZE - 7;
             boolean isHovered = mouseX >= buttonX && mouseY >= startY && mouseX < buttonX + BTN_SIZE && mouseY < startY + BTN_SIZE;
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, isHovered ? TEX_SEARCH_HIGHLIGHT : TEX_SEARCH, buttonX, startY, BTN_SIZE, BTN_SIZE);
         } else {
-            // Отрисовка замочка (здесь проверка наведения не нужна, так как нет текстуры подсветки)
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
             int lockY = startY + (BG_HEIGHT - LOCK_SIZE) / 2;
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SearchifyConfig.autoLock ? TEX_LOCK : TEX_UNLOCK, lockX, lockY, LOCK_SIZE, LOCK_SIZE);
+        }
+
+        if (SearchifyConfig.enableHistory) {
+            int historyX = this.x + this.backgroundWidth + 1;
+            int historyY = startY + 1;
+            // Логика анимации сжатия
+            float scale = 1.0f;
+            if (this.historyAnimProgress < 1.0f) {
+                // Слегка ускоряем шаг анимации, так как теперь движение короче (без долгой раскачки)
+                this.historyAnimProgress += 0.15f * currentDeltaTicks;
+                if (this.historyAnimProgress > 1.0f) this.historyAnimProgress = 1.0f;
+
+                float t = this.historyAnimProgress;
+                // Формула: берем половину синусоиды (плавный подъем и спад) и ВЫЧИТАЕМ ее.
+                // 0.25f — это сила сжатия (иконка уменьшится максимум до 75% от своего размера).
+                scale = 1.0f - (float) (Math.sin(t * Math.PI)) * 0.15f;
+            }
+
+            // Рендер иконки с учетом анимации
+            if (scale != 1.0f) {
+                context.getMatrices().pushMatrix();
+                float centerX = historyX + HISTORY_SIZE / 2.0f;
+                float centerY = historyY + HISTORY_SIZE / 2.0f;
+                context.getMatrices().translate(centerX, centerY);
+                context.getMatrices().scale(scale, scale);
+                context.getMatrices().translate(-centerX, -centerY);
+            }
+
+            context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, TEX_HISTORY, historyX, historyY, HISTORY_SIZE, HISTORY_SIZE);
+
+            if (scale != 1.0f) {
+                context.getMatrices().popMatrix();
+            }
+
+            if (this.isHistoryOpen && !SearchifyConfig.searchHistory.isEmpty()) {
+                int maxTextWidth = 0;
+                for (String s : SearchifyConfig.searchHistory) {
+                    int w = this.textRenderer.getWidth(s);
+                    if (w > maxTextWidth) maxTextWidth = w;
+                }
+                int dropDownWidth = maxTextWidth + 8;
+                int textHeight = 12;
+                int listHeight = SearchifyConfig.searchHistory.size() * textHeight + 4;
+
+                context.fill(historyX, historyY + HISTORY_SIZE + 2, historyX + dropDownWidth, historyY + HISTORY_SIZE + 2 + listHeight, 0x88000000);
+
+                int currentY = historyY + HISTORY_SIZE + 4;
+                for (String historyItem : SearchifyConfig.searchHistory) {
+                    boolean isHovered = mouseX >= historyX && mouseX <= historyX + dropDownWidth && mouseY >= currentY && mouseY < currentY + textHeight;
+                    Text textToDraw = Text.literal(historyItem);
+                    if (isHovered) {
+                        textToDraw = textToDraw.copy().formatted(Formatting.UNDERLINE);
+                    }
+                    context.drawTextWithShadow(this.textRenderer, textToDraw, historyX + 4, currentY + 2, isHovered ? 0xFFFFFFFF : 0xFFAAAAAA);
+                    currentY += textHeight;
+                }
+            }
         }
     }
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(Click click, boolean doubled, CallbackInfoReturnable<Boolean> cir) {
-        if (!this.isSupportedCache || this.searchBox == null || click.button() != 0) return;
+        // Разрешаем только ЛКМ (0) и ПКМ (1)
+        if (!this.isSupportedCache || this.searchBox == null || (click.button() != 0 && click.button() != 1)) return;
 
         double mouseX = click.x();
         double mouseY = click.y();
+        int button = click.button();
         int startY = this.y + 4;
+        int padding = 3;
+
+        // --- ОБРАБОТКА ПКМ (Быстрая очистка) ---
+        if (button == 1) {
+            if (this.searchBox.isVisible()) {
+                if (mouseX >= this.searchBox.getX() - 2 && mouseX <= this.searchBox.getX() + this.currentBgWidth &&
+                        mouseY >= this.searchBox.getY() - 2 && mouseY <= this.searchBox.getY() + BG_HEIGHT + 2) {
+                    playClickSound();
+                    this.searchBox.setText("");
+                    if (SearchifyConfig.autoLock) {
+                        SearchifyConfig.savedSearchQuery = "";
+                        SearchifyConfig.save();
+                    }
+                    this.lastRawQuery = "";
+                    this.cachedSearchQuery = "";
+                    cir.setReturnValue(true);
+                }
+            }
+            return; // Завершаем обработку для ПКМ
+        }
+
+        // --- ОБРАБОТКА ЛКМ (Стандартная) ---
+        if (SearchifyConfig.enableHistory) {
+            int historyX = this.x + this.backgroundWidth + 1;
+            int historyY = startY + 1;
+
+            if (mouseX >= (historyX - padding) && mouseY >= (historyY - padding) &&
+                    mouseX < (historyX + HISTORY_SIZE + padding) && mouseY < (historyY + HISTORY_SIZE + padding)) {
+                playClickSound();
+                this.isHistoryOpen = !this.isHistoryOpen;
+                cir.setReturnValue(true);
+                return;
+            }
+
+            if (this.isHistoryOpen && !SearchifyConfig.searchHistory.isEmpty()) {
+                int maxTextWidth = 0;
+                for (String s : SearchifyConfig.searchHistory) {
+                    int w = this.textRenderer.getWidth(s);
+                    if (w > maxTextWidth) maxTextWidth = w;
+                }
+                int dropDownWidth = maxTextWidth + 8;
+                int textHeight = 12;
+                int currentY = historyY + HISTORY_SIZE + 4;
+
+                for (String historyItem : SearchifyConfig.searchHistory) {
+                    if (mouseX >= historyX && mouseX <= historyX + dropDownWidth && mouseY >= currentY && mouseY < currentY + textHeight) {
+                        playClickSound();
+
+                        if (!this.searchBox.isVisible()) {
+                            this.searchBox.setVisible(true);
+                            this.searchBox.active = true;
+                            this.setFocused(this.searchBox);
+                            this.searchBox.setFocused(true);
+                        }
+
+                        this.searchBox.setText(historyItem);
+                        if (SearchifyConfig.autoLock) {
+                            SearchifyConfig.savedSearchQuery = historyItem;
+                            SearchifyConfig.save();
+                        }
+                        this.lastRawQuery = historyItem;
+                        this.cachedSearchQuery = historyItem.trim().toLowerCase();
+
+                        // Запускаем пружинистую анимацию иконки!
+                        this.historyAnimProgress = 0.0f;
+                        this.isHistoryOpen = false;
+
+                        cir.setReturnValue(true);
+                        return;
+                    }
+                    currentY += textHeight;
+                }
+            }
+        }
 
         if (!this.searchBox.isVisible()) {
             int buttonX = this.x + this.backgroundWidth - BTN_SIZE - 7;
@@ -222,10 +371,9 @@ public abstract class HandledScreenMixin extends Screen {
         } else {
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
             int lockY = startY + (BG_HEIGHT - LOCK_SIZE) / 2;
-            int padding = 3;
+
             if (mouseX >= (lockX - padding) && mouseY >= (lockY - padding) &&
                     mouseX < (lockX + LOCK_SIZE + padding) && mouseY < (lockY + LOCK_SIZE + padding)) {
-
                 playClickSound();
                 SearchifyConfig.autoLock = !SearchifyConfig.autoLock;
                 SearchifyConfig.savedSearchQuery = SearchifyConfig.autoLock ? this.searchBox.getText() : "";
@@ -242,7 +390,10 @@ public abstract class HandledScreenMixin extends Screen {
         if (this.searchBox != null && this.searchBox.isFocused() && this.searchBox.isVisible()) {
             if (this.searchBox.keyPressed(input)) {
                 cir.setReturnValue(true);
-            } else if (this.client != null && (this.client.options.inventoryKey.matchesKey(input) || this.client.options.dropKey.matchesKey(input))) {
+            } else if (this.client != null && (
+                    this.client.options.inventoryKey.matchesKey(input) ||
+                            this.client.options.dropKey.matchesKey(input) ||
+                            this.client.options.swapHandsKey.matchesKey(input))) { // Добавлена блокировка клавиши F (смены рук)
                 cir.setReturnValue(true);
             }
         } else if (this.searchBox != null) {
@@ -294,14 +445,12 @@ public abstract class HandledScreenMixin extends Screen {
             Arrays.fill(cachedStacks, null);
         }
 
-        // Быстрый путь: читаем результат из кэша O(1)
         if (slotId >= 0 && slotId < cachedStacks.length) {
             if (cachedStacks[slotId] != null && ItemStack.areEqual(stack, cachedStacks[slotId])) {
                 return cachedMatches[slotId];
             }
         }
 
-        // Запускаем рекурсивный поиск с начальной глубиной 0
         boolean match = performDeepSearch(stack, cachedSearchQuery, 0);
 
         if (slotId >= 0 && slotId < cachedStacks.length) {
@@ -313,29 +462,17 @@ public abstract class HandledScreenMixin extends Screen {
 
     @Unique
     private boolean performDeepSearch(ItemStack stack, String query, int depth) {
-        // ОГРАНИЧЕНИЕ ГЛУБИНЫ: Защита от лагов при бесконечной вложенности из-за модов (Рюкзак в Рюкзак и т.д.)
-        // Уровень 0: Слот инвентаря
-        // Уровень 1: Шалкер
-        // Уровень 2: Мешок в шалкере
-        // Больше 3-х уровней проверять нет смысла, прерываем рекурсию.
         if (depth > 3 || stack.isEmpty()) return false;
-
-        // Если сам контейнер или предмет подходит под запрос — сразу возвращаем true
         if (isItemStackMatchingSearch(stack, query)) return true;
 
-        // Если разрешен поиск внутри контейнеров, "проваливаемся" глубже
         if (SearchifyConfig.searchInsideContainers) {
-            // Проверка обычных контейнеров (Шалкеры)
             ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
             if (container != null) {
                 for (ItemStack innerStack : container.iterateNonEmpty()) {
-                    // Рекурсивный вызов с увеличением глубины.
-                    // Мгновенно выходим, если нашли.
                     if (performDeepSearch(innerStack, query, depth + 1)) return true;
                 }
             }
 
-            // Проверка мешков (Bundles)
             BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
             if (bundle != null) {
                 for (ItemStack innerStack : bundle.iterate()) {
@@ -442,7 +579,6 @@ public abstract class HandledScreenMixin extends Screen {
 
         if (currentFade != targetFade) {
             float step = 0.3f * (SearchifyConfig.animationSpeed / 100.0f) * currentDeltaTicks;
-
             currentFade = currentFade < targetFade ? Math.min(currentFade + step, targetFade) : Math.max(currentFade - step, targetFade);
             fadeMap.put(slot.id, currentFade);
         }

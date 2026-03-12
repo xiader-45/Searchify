@@ -131,9 +131,10 @@ public class ModMenuIntegration implements ModMenuApi {
                         .name(Text.translatable("searchify.config.category.general"))
                         .tooltip(Text.translatable("searchify.config.category.general.tooltip"))
 
+                        // Найдите метод createScreen и обновите блок с OptionGroup (поведение)
+
                         .group(OptionGroup.createBuilder()
                                 .name(Text.translatable("searchify.config.group.behavior"))
-                                .option(keybindButton)
                                 .option(Option.<Boolean>createBuilder()
                                         .name(Text.translatable("searchify.config.enabled.name"))
                                         .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enabled.desc")).customImage(previewImage).build())
@@ -154,6 +155,12 @@ public class ModMenuIntegration implements ModMenuApi {
                                         .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.searchInside.desc")).customImage(previewImage).build())
                                         .binding(true, () -> SearchifyConfig.searchInsideContainers, val -> SearchifyConfig.searchInsideContainers = val)
                                         .controller(TickBoxControllerBuilder::create).build())
+                                .option(Option.<Boolean>createBuilder()
+                                        .name(Text.translatable("searchify.config.enableHistory.name"))
+                                        .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.enableHistory.desc")).customImage(previewImage).build())
+                                        .binding(true, () -> SearchifyConfig.enableHistory, val -> SearchifyConfig.enableHistory = val)
+                                        .controller(TickBoxControllerBuilder::create).build())
+                                .option(keybindButton)
                                 .build())
 
                         .group(OptionGroup.createBuilder()

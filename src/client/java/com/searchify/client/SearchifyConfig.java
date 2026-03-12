@@ -11,6 +11,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 public class SearchifyConfig {
 
@@ -22,6 +24,9 @@ public class SearchifyConfig {
     public static boolean autoLock = false;
     public static String savedSearchQuery = "";
     public static boolean searchInsideContainers = true;
+    public static boolean enableHistory = true;
+    public static List<String> searchHistory = new ArrayList<>();
+
     public static String searchKeybind = "key.keyboard.g";
 
     public static DisplayMode displayMode = DisplayMode.ANIMATION;
@@ -46,6 +51,8 @@ public class SearchifyConfig {
         boolean autoLock = false;
         String savedSearchQuery = "";
         boolean searchInsideContainers = true;
+        boolean enableHistory = true;
+        List<String> searchHistory = new ArrayList<>();
         String searchKeybind = "key.keyboard.g";
 
         DisplayMode displayMode = DisplayMode.ANIMATION;
@@ -70,6 +77,11 @@ public class SearchifyConfig {
                     isEnabled = data.isEnabled;
                     autoLock = data.autoLock;
                     searchInsideContainers = data.searchInsideContainers;
+                    enableHistory = data.enableHistory;
+
+                    if (data.searchHistory != null) {
+                        searchHistory = new ArrayList<>(data.searchHistory);
+                    }
                     if (data.savedSearchQuery != null) savedSearchQuery = data.savedSearchQuery;
                     if (data.searchKeybind != null) searchKeybind = data.searchKeybind;
 
@@ -106,6 +118,8 @@ public class SearchifyConfig {
         data.isEnabled = isEnabled;
         data.autoLock = autoLock;
         data.searchInsideContainers = searchInsideContainers;
+        data.enableHistory = enableHistory;
+        data.searchHistory = new ArrayList<>(searchHistory);
         data.savedSearchQuery = savedSearchQuery;
         data.searchKeybind = searchKeybind;
 

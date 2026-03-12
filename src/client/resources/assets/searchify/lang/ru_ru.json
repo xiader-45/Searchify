@@ -40,5 +40,7 @@
   "searchify.config.keybind.name": "Клавиша быстрого поиска",
   "searchify.config.keybind.desc": "Нажмите эту клавишу, наведя курсор на предмет, чтобы автоматически вписать его в поиск.",
   "searchify.message.press_key": "Нажмите на любую клавишу...",
-  "searchify.message.press_esc_to_cancel": "ESC - Отмена"
+  "searchify.message.press_esc_to_cancel": "ESC - Отмена",
+  "searchify.config.enableHistory.name": "История поиска",
+  "searchify.config.enableHistory.desc": "Отображает кнопку истории рядом со строкой поиска для доступа к 5 последним запросам."
 }
