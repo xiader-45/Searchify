@@ -25,7 +25,7 @@ public class SearchifyConfig {
     public static String searchKeybind = "key.keyboard.g";
 
     public static DisplayMode displayMode = DisplayMode.ANIMATION;
-    public static int animationSpeed = 30;
+    public static int animationSpeed = 100;
     public static int highlightColor = 0x00FF00;
     public static int ghostAlpha = 70;
     public static int pulseScale = 125;
@@ -49,7 +49,7 @@ public class SearchifyConfig {
         String searchKeybind = "key.keyboard.g";
 
         DisplayMode displayMode = DisplayMode.ANIMATION;
-        int animationSpeed = 30;
+        int animationSpeed = 100;
         int ghostAlpha = 70;
         int pulseScale = 125;
         String highlightColor = "#00FF00";
@@ -74,7 +74,7 @@ public class SearchifyConfig {
                     if (data.searchKeybind != null) searchKeybind = data.searchKeybind;
 
                     if (data.displayMode != null) displayMode = data.displayMode;
-                    animationSpeed = Math.max(1, Math.min(100, data.animationSpeed));
+                    animationSpeed = Math.max(10, Math.min(250, data.animationSpeed));
                     ghostAlpha = Math.max(0, Math.min(100, data.ghostAlpha));
                     pulseScale = Math.max(100, Math.min(200, data.pulseScale));
 

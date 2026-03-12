@@ -79,7 +79,7 @@ public class SearchifyPreviewImage implements ImageRenderer {
 
         float targetFade = isSearching ? 0.0f : 1.0f;
         if (currentFade != targetFade) {
-            float speedMultiplier = currentSpeed / 100.0f;
+            float speedMultiplier = 0.3f * (currentSpeed / 100.0f);
             float step = speedMultiplier * deltaTicks;
 
             if (isSearching) {

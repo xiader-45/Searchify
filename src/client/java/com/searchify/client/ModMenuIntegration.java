@@ -86,10 +86,13 @@ public class ModMenuIntegration implements ModMenuApi {
         Option<Integer> animationSpeedOption = Option.<Integer>createBuilder()
                 .name(Text.translatable("searchify.config.animationSpeed.name"))
                 .description(OptionDescription.createBuilder().text(Text.translatable("searchify.config.animationSpeed.desc")).customImage(previewImage).build())
-                .binding(30, () -> SearchifyConfig.animationSpeed, val -> SearchifyConfig.animationSpeed = val)
+                .binding(100, () -> SearchifyConfig.animationSpeed, val -> SearchifyConfig.animationSpeed = val)
                 .available(SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.ANIMATION || SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE)
                 .listener((opt, val) -> SearchifyPreviewImage.currentSpeed = val)
-                .controller(opt -> IntegerSliderControllerBuilder.create(opt).range(1, 100).step(1)).build();
+                .controller(opt -> IntegerSliderControllerBuilder.create(opt)
+                        .range(10, 250)
+                        .step(1)
+                        .formatValue(v -> Text.literal(v + "%"))).build();
 
         Option<Integer> pulseScaleOption = Option.<Integer>createBuilder()
                 .name(Text.translatable("searchify.config.pulseScale.name"))

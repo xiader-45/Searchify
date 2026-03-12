@@ -194,6 +194,7 @@ public abstract class HandledScreenMixin extends Screen {
             boolean isHovered = mouseX >= buttonX && mouseY >= startY && mouseX < buttonX + BTN_SIZE && mouseY < startY + BTN_SIZE;
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, isHovered ? TEX_SEARCH_HIGHLIGHT : TEX_SEARCH, buttonX, startY, BTN_SIZE, BTN_SIZE);
         } else {
+            // Отрисовка замочка (здесь проверка наведения не нужна, так как нет текстуры подсветки)
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
             int lockY = startY + (BG_HEIGHT - LOCK_SIZE) / 2;
             context.drawGuiTexture(RenderPipelines.GUI_TEXTURED, SearchifyConfig.autoLock ? TEX_LOCK : TEX_UNLOCK, lockX, lockY, LOCK_SIZE, LOCK_SIZE);
@@ -221,7 +222,10 @@ public abstract class HandledScreenMixin extends Screen {
         } else {
             int lockX = this.x + this.backgroundWidth - 7 - LOCK_SIZE - 3;
             int lockY = startY + (BG_HEIGHT - LOCK_SIZE) / 2;
-            if (mouseX >= lockX && mouseY >= lockY && mouseX < lockX + LOCK_SIZE && mouseY < lockY + LOCK_SIZE) {
+            int padding = 3;
+            if (mouseX >= (lockX - padding) && mouseY >= (lockY - padding) &&
+                    mouseX < (lockX + LOCK_SIZE + padding) && mouseY < (lockY + LOCK_SIZE + padding)) {
+
                 playClickSound();
                 SearchifyConfig.autoLock = !SearchifyConfig.autoLock;
                 SearchifyConfig.savedSearchQuery = SearchifyConfig.autoLock ? this.searchBox.getText() : "";
@@ -437,7 +441,8 @@ public abstract class HandledScreenMixin extends Screen {
         float currentFade = fadeMap.getOrDefault(slot.id, SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.PULSE ? 0.0f : 1.0f);
 
         if (currentFade != targetFade) {
-            float step = (SearchifyConfig.animationSpeed / 100.0f) * currentDeltaTicks;
+            float step = 0.3f * (SearchifyConfig.animationSpeed / 100.0f) * currentDeltaTicks;
+
             currentFade = currentFade < targetFade ? Math.min(currentFade + step, targetFade) : Math.max(currentFade - step, targetFade);
             fadeMap.put(slot.id, currentFade);
         }
