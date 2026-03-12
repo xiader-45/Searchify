@@ -50,5 +50,9 @@
   "searchify.message.press_key": "Press any key to bind...",
   "searchify.message.press_esc_to_cancel": "ESC - Cancel",
   "searchify.config.enableHistory.name": "Search History",
-  "searchify.config.enableHistory.desc": "Displays a history button next to the search bar to access the last 5 queries."
+  "searchify.config.enableHistory.desc": "Displays a history button next to the search bar to access the last 5 queries.",
+  "searchify.config.searchInPlayerInventory.name": "Search in Player Inventory",
+  "searchify.config.searchInPlayerInventory.desc": "If disabled, the search will only highlight items in the opened container, ignoring your own inventory.",
+  "searchify.config.autoFocusSearchBar.name": "Auto-Focus Search Bar",
+  "searchify.config.autoFocusSearchBar.desc": "Automatically opens and focuses the search bar when opening a container, allowing you to type immediately."
 }

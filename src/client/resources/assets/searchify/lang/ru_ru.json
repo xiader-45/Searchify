@@ -42,5 +42,9 @@
   "searchify.message.press_key": "Нажмите на любую клавишу...",
   "searchify.message.press_esc_to_cancel": "ESC - Отмена",
   "searchify.config.enableHistory.name": "История поиска",
-  "searchify.config.enableHistory.desc": "Отображает кнопку истории рядом со строкой поиска для доступа к 5 последним запросам."
+  "searchify.config.enableHistory.desc": "Отображает кнопку истории рядом со строкой поиска для доступа к 5 последним запросам.",
+  "searchify.config.searchInPlayerInventory.name": "Поиск в инвентаре игрока",
+  "searchify.config.searchInPlayerInventory.desc": "Если выключено, поиск будет работать только для открытого контейнера (сундука), игнорируя ваши предметы.",
+  "searchify.config.autoFocusSearchBar.name": "Авто-активация строки",
+  "searchify.config.autoFocusSearchBar.desc": "Автоматически открывает и активирует строку поиска при открытии инвентаря, позволяя сразу набирать текст."
 }

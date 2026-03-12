@@ -37,6 +37,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.gui.Click;
+import net.minecraft.entity.player.PlayerInventory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -134,8 +135,9 @@ public abstract class HandledScreenMixin extends Screen {
         }
 
         String savedText = SearchifyConfig.autoLock ? SearchifyConfig.savedSearchQuery : "";
-        boolean wasVisible = SearchifyConfig.autoLock;
-        boolean wasFocused = false;
+        // ЕСЛИ autoFocusSearchBar ВКЛЮЧЕН — СТРОКА СРАЗУ ВИДИМА И АКТИВНА
+        boolean wasVisible = SearchifyConfig.autoLock || SearchifyConfig.autoFocusSearchBar;
+        boolean wasFocused = SearchifyConfig.autoFocusSearchBar;
 
         if (this.searchBox != null) {
             savedText = this.searchBox.getText();
@@ -182,7 +184,7 @@ public abstract class HandledScreenMixin extends Screen {
             String currentText = this.searchBox.getText().trim();
             if (!currentText.isEmpty() && SearchifyConfig.enableHistory) {
                 SearchifyConfig.searchHistory.remove(currentText);
-                SearchifyConfig.searchHistory.add(0, currentText);
+                SearchifyConfig.searchHistory.addFirst(currentText);
                 if (SearchifyConfig.searchHistory.size() > 5) {
                     SearchifyConfig.searchHistory = SearchifyConfig.searchHistory.subList(0, 5);
                 }
@@ -393,7 +395,7 @@ public abstract class HandledScreenMixin extends Screen {
             } else if (this.client != null && (
                     this.client.options.inventoryKey.matchesKey(input) ||
                             this.client.options.dropKey.matchesKey(input) ||
-                            this.client.options.swapHandsKey.matchesKey(input))) { // Добавлена блокировка клавиши F (смены рук)
+                            this.client.options.swapHandsKey.matchesKey(input))) {
                 cir.setReturnValue(true);
             }
         } else if (this.searchBox != null) {
@@ -403,13 +405,17 @@ public abstract class HandledScreenMixin extends Screen {
                 ItemStack stack = this.focusedSlot.getStack();
                 String localizedName = stack.getName().getString();
 
+                // Открываем строку и вставляем название предмета
                 this.searchBox.setVisible(true);
                 this.searchBox.active = true;
                 this.searchBox.setText(localizedName);
 
-                SearchifyConfig.autoLock = true;
-                SearchifyConfig.savedSearchQuery = localizedName;
-                SearchifyConfig.save();
+                // Больше не включаем авто-блокировку принудительно.
+                // Обновляем сохраненный текст только если замочек УЖЕ включен игроком.
+                if (SearchifyConfig.autoLock) {
+                    SearchifyConfig.savedSearchQuery = localizedName;
+                    SearchifyConfig.save();
+                }
 
                 playClickSound();
                 cir.setReturnValue(true);
@@ -546,6 +552,8 @@ public abstract class HandledScreenMixin extends Screen {
     private void onDrawSlotHead(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
         if (!this.isSupportedCache) return;
 
+        if (!SearchifyConfig.searchInPlayerInventory && slot.inventory instanceof PlayerInventory) return;
+
         boolean isMatching = isItemMatchingSearch(slot);
         boolean isSearching = this.searchBox != null && this.searchBox.isVisible() && !this.searchBox.getText().trim().isEmpty();
         boolean hasCursorItem = this.handler != null && !this.handler.getCursorStack().isEmpty();
@@ -610,6 +618,8 @@ public abstract class HandledScreenMixin extends Screen {
     @Inject(method = "drawSlot", at = @At("TAIL"))
     private void onDrawSlotTail(DrawContext context, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
         if (!this.isSupportedCache) return;
+
+        if (!SearchifyConfig.searchInPlayerInventory && slot.inventory instanceof PlayerInventory) return;
 
         if (SearchifyConfig.displayMode == SearchifyConfig.DisplayMode.GHOST) {
             if (!isItemMatchingSearch(slot) && slot.hasStack()) {
