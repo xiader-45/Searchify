@@ -114,7 +114,8 @@ public class SearchifyPreviewImage implements ImageRenderer {
         int y = startY + 15;
 
         // Динамический текст поиска на основе текущего запроса
-        Text titleText = isSearching ? Text.literal("Searching: \"" + Arrays.toString(targetQueries) + "\"") : Text.translatable("searchify.preview.empty");
+        // Меняем хардкод на использование локализации с подстановкой:
+        Text titleText = isSearching ? Text.translatable("searchify.preview.searching", (Object) targetQueries) : Text.translatable("searchify.preview.empty");
         int textWidth = MinecraftClient.getInstance().textRenderer.getWidth(titleText);
         context.drawText(MinecraftClient.getInstance().textRenderer, titleText, startX + (width - textWidth) / 2, y - 12, isSearching ? 0x55FF55 : 0xAAAAAA, false);
 

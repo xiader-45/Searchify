@@ -4,47 +4,63 @@
   "searchify.config.category.general.tooltip": "Основные параметры поиска и выделения предметов.",
   "searchify.config.group.behavior": "Общее",
   "searchify.config.group.visuals": "Отображение",
+
   "searchify.config.enabled.name": "Включить мод",
   "searchify.config.enabled.desc": "Полностью включает или отключает логику поиска и скрытия предметов.",
+
   "searchify.config.displayMode.name": "Режим выделения",
-  "searchify.config.displayMode.desc": "§lАнимация Pop/Pop-out§r - пружинистое сжатие скрытых.\n\n§lТекстура§r - текстура поверх скрытых.\n\n§lЦвет§r - цветовой фон найденных.\n\n§lОбводка§r - обводка найденных.\n\n§lАнимация Scale§r - увеличение найденных.\n\n§lПрозрачность§r - прозрачность ненайденных.\n\n",
+  "searchify.config.displayMode.desc": "Выберите, как будут выделяться найденные предметы.\n\n§lСжатие (Pop-out)§r — пружинистое сжатие ненайденных предметов.\n§lТекстура§r — наложение темной текстуры на ненайденные.\n§lЦвет§r — цветовой фон для найденных предметов.\n§lОбводка§r — цветная обводка найденных предметов.\n§lУвеличение (Scale)§r — пульсирующее увеличение найденных.\n§lПрозрачность§r — полупрозрачность ненайденных предметов.",
+
   "searchify.config.animationSpeed.name": "Скорость анимации (%)",
-  "searchify.config.animationSpeed.desc": "Только для режима Анимация Pop/Pop-out и Scale.",
-  "searchify.config.highlightColor.name": "Цвет",
-  "searchify.config.highlightColor.desc": "Применяется только для режимов COLOR и OUTLINE.",
-  "searchify.config.enum.animation": "Анимация Pop/Pop-out",
+  "searchify.config.animationSpeed.desc": "Определяет скорость для режимов анимации §lСжатие§r и §lУвеличение§r.",
+
+  "searchify.config.highlightColor.name": "Цвет выделения",
+  "searchify.config.highlightColor.desc": "Используется только для режимов §lЦвет§r и §lОбводка§r.",
+
+  "searchify.config.enum.animation": "Сжатие (Pop-out)",
   "searchify.config.enum.texture": "Текстура",
   "searchify.config.enum.color": "Цвет",
   "searchify.config.enum.outline": "Обводка",
-  "searchify.config.enum.pulse": "Анимация Scale",
-  "searchify.preview.searching": "Поиск: \"stone\"",
-  "searchify.preview.empty": "Поиск: (пусто)",
+  "searchify.config.enum.pulse": "Увеличение (Scale)",
   "searchify.config.enum.ghost": "Прозрачность",
-  "searchify.config.ghostAlpha.name": "Прозрачность (%)",
-  "searchify.config.ghostAlpha.desc": "Только для режима Прозрачность.",
-  "searchify.config.pulseScale.name": "Сила анимации Scale (%)",
-  "searchify.config.pulseScale.desc": "Только для режима Анимация Scale.",
+
+  "searchify.preview.searching": "Поиск: \"%s\"",
+  "searchify.preview.empty": "Поиск: (пусто)",
+
+  "searchify.config.ghostAlpha.name": "Уровень прозрачности (%)",
+  "searchify.config.ghostAlpha.desc": "Настраивает прозрачность ненайденных предметов в режиме §lПрозрачность§r.",
+
+  "searchify.config.pulseScale.name": "Сила увеличения (%)",
+  "searchify.config.pulseScale.desc": "Настраивает максимальный размер предмета для анимации §lУвеличение§r.",
+
   "searchify.config.autoLock.name": "Закрепить поиск (Замок)",
   "searchify.config.autoLock.desc": "Если включено, строка поиска будет открыта по умолчанию и запомнит введенный текст даже после перезапуска игры.",
+
   "searchify.config.category.guis": "Интерфейсы",
-  "searchify.config.category.guis.tooltip": "Настройка экранов, в которых будет отображаться поиск",
+  "searchify.config.category.guis.tooltip": "Настройка экранов, в которых будет отображаться поиск.",
   "searchify.config.group.containers": "Поддерживаемые блоки",
-  "searchify.config.chest.desc": "Отображать строку поиска в интерфейсе сундука.",
-  "searchify.config.barrel.desc": "Отображать строку поиска в интерфейсе бочки.",
-  "searchify.config.enderChest.desc": "Отображать строку поиска в интерфейсе эндер-сундука.",
-  "searchify.config.trappedChest.desc": "Отображать строку поиска в интерфейсе сундука-ловушки.",
-  "searchify.config.copperChest.desc": "Отображать строку поиска в интерфейсе медного сундука.",
-  "searchify.config.shulkerBox.desc": "Отображать строку поиска в интерфейсе шалкерового ящика.",
+
+  "searchify.config.chest.desc": "Отображать строку поиска в интерфейсе §lСундука§r.",
+  "searchify.config.barrel.desc": "Отображать строку поиска в интерфейсе §lБочки§r.",
+  "searchify.config.enderChest.desc": "Отображать строку поиска в интерфейсе §lЭндер-сундука§r.",
+  "searchify.config.trappedChest.desc": "Отображать строку поиска в интерфейсе §lСундука-ловушки§r.",
+  "searchify.config.copperChest.desc": "Отображать строку поиска в интерфейсе §lМедного сундука§r.",
+  "searchify.config.shulkerBox.desc": "Отображать строку поиска в интерфейсе §lШалкерового ящика§r.",
+
   "searchify.config.searchInside.name": "Искать внутри контейнеров",
   "searchify.config.searchInside.desc": "Если включено, поиск будет также проверять содержимое шалкеровых ящиков и мешков, находящихся в инвентаре.",
+
   "searchify.config.keybind.name": "Клавиша быстрого поиска",
-  "searchify.config.keybind.desc": "Нажмите эту клавишу, наведя курсор на предмет, чтобы автоматически вписать его в поиск.",
-  "searchify.message.press_key": "Нажмите на любую клавишу...",
+  "searchify.config.keybind.desc": "Нажмите эту клавишу, наведя курсор на предмет, чтобы автоматически вписать его название в поиск.",
+  "searchify.message.press_key": "Нажмите любую клавишу...",
   "searchify.message.press_esc_to_cancel": "ESC - Отмена",
+
   "searchify.config.enableHistory.name": "История поиска",
-  "searchify.config.enableHistory.desc": "Отображает кнопку истории рядом со строкой поиска для доступа к 5 последним запросам.",
+  "searchify.config.enableHistory.desc": "Отображает кнопку истории рядом со строкой поиска для доступа к §l5 последним запросам§r.",
+
   "searchify.config.searchInPlayerInventory.name": "Поиск в инвентаре игрока",
-  "searchify.config.searchInPlayerInventory.desc": "Если выключено, поиск будет работать только для открытого контейнера (сундука), игнорируя ваши предметы.",
-  "searchify.config.autoFocusSearchBar.name": "Авто-активация строки",
+  "searchify.config.searchInPlayerInventory.desc": "Если включено, поиск будет выделять предметы как в открытом контейнере, так и в вашем инвентаре.",
+
+  "searchify.config.autoFocusSearchBar.name": "Авто-фокус строки поиска",
   "searchify.config.autoFocusSearchBar.desc": "Автоматически открывает и активирует строку поиска при открытии инвентаря, позволяя сразу набирать текст."
 }
